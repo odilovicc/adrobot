@@ -64,8 +64,10 @@ def test_urls_keep_filters_and_reset_page():
     query = q(q="keto", state="active", page=3)
     assert query.url(page=4) == "?q=keto&state=active&page=4"
     assert query.url(state="") == "?q=keto"
-    assert query.sort_url("name") == "?q=keto&state=active&sort=name&dir=asc"
-    assert q(sort="name", dir="asc").sort_url("name") == "?sort=name"
+    assert query.sort_url("name") == "?q=keto&state=active&sort=name"
+    assert q(sort="name", dir="asc").sort_url("name") == "?sort=name&dir=desc"  # second click flips
+    assert q(sort="name", dir="desc").sort_url("name") == "?sort=name"
+    assert q().sort_url("id") == "?dir=asc"
 
 
 def test_name_sort_is_natural():

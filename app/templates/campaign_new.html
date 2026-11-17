@@ -33,9 +33,10 @@
 {% if errors.get('__all__') %}
   <div class="alert alert-danger d-flex gap-2" role="alert"><i class="bi bi-exclamation-octagon mt-1" aria-hidden="true"></i><div>{{ errors['__all__'] }}</div></div>
 {% elif errors %}
+  {% set n = errors | length %}
   <div class="alert alert-danger" role="alert" id="error-summary" tabindex="-1">
-    <strong>Исправьте {{ errors | length }} {{ 'поле' if errors | length == 1 else 'поля' }}:</strong>
-    <ul class="mb-0 mt-1">{% for name, message in errors.items() %}<li><a href="#{{ name }}" class="alert-link">{{ message }}</a></li>{% endfor %}</ul>
+    <strong>Исправьте {{ n }} {{ 'поле' if n == 1 else 'поля' if n in [2, 3, 4] else 'полей' }}:</strong>
+    <ul class="mb-0 mt-1">{% for name in ['name', 'domain_id', 'group_id', 'traffic_source_id', 'geo', 'offer_id'] if errors.get(name) %}<li><a href="#{{ name }}" class="alert-link">{{ errors[name] }}</a></li>{% endfor %}</ul>
   </div>
 {% endif %}
 

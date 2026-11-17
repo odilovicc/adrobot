@@ -170,7 +170,8 @@ def test_adding_removed_offer_brings_it_back(editor, db):
     sid = stream(db).id
     ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/remove"))
     ok(editor.post(f"/api/streams/{sid}/offers", json={"offer_id": 3747}))
-    assert shares(db) == {3747: 34, 3748: 33, 3749: 33}
+    assert shares(db) == {3747: 33, 3748: 33, 3749: 34}  # back to Keitaro's split
+    assert not stream(db).is_dirty
 
 
 def test_push_refuses_when_keitaro_changed_after_fetch(editor, db, kt_state):
@@ -338,3 +339,29 @@ def test_clicks_today_unavailable_shows_dash(editor, db, kt_state, monkeypatch):
     ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
     assert stream(db).clicks_today is None
     assert "clicks today: <span class=\"mono\">—</span>" in editor.get(f"/campaigns/{CAMPAIGN}/streams").text
+
+
+def test_undo_by_hand_returns_keitaro_split_and_clean_stream(editor, db):
+    sid = stream(db).id
+    ok(editor.post(f"/api/streams/{sid}/offers", json={"offer_id": OFFER4}))
+    ok(editor.post(f"/api/stream-offers/{link_id(db, OFFER4)}/remove"))
+    assert shares(db) == {3747: 33, 3748: 33, 3749: 34} and not stream(db).is_dirty
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3748)}/remove"))
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3748)}/restore"))
+    assert shares(db) == {3747: 33, 3748: 33, 3749: 34} and not stream(db).is_dirty
+
+
+def test_push_without_changes_is_refused(editor, db, kt_state):
+    resp = editor.post(f"/api/streams/{stream(db).id}/push")
+    assert resp.status_code == 400 and "нет неопубликованных" in resp.json()["error"]
+
+
+def test_html_error_pages(client):
+    page = client.get("/campaigns/999999/streams")
+    assert page.status_code == 404 and "Такой кампании нет в Keitaro" in page.text and "<html" in page.text
+    page = client.get("/campaigns/abc/streams")
+    assert page.status_code == 404 and "Страница не найдена" in page.text
+    page = client.get("/no-such-page")
+    assert page.status_code == 404 and "Страница не найдена" in page.text
+    api = client.post("/api/streams/1/offers")
+    assert api.status_code == 400 and api.json()["error"] == "Пустой или некорректный запрос"

@@ -136,10 +136,13 @@ def rebalance(stream: Stream) -> None:
     Offers disabled in Keitaro don't take traffic: they keep their share and stay out of the 100%.
     """
     links = [link for link in sorted(stream.offers, key=lambda link: link.position) if not link.kt_disabled]
+    # Same offers as in Keitaro (e.g. added and removed again): prefer Keitaro's split, so an undo
+    # doesn't move the rounding remainder around and leave the stream "dirty" with no real change.
+    back_to_published = all(not link.is_new and link.state == link.published_state for link in links)
     slots = [
         Slot(link.id or id(link), active=link.state == OfferState.ACTIVE,
              pinned_share=link.share if link.pinned else None,
-             current=link.share)  # fmt: skip
+             current=link.published_share if back_to_published else link.share)  # fmt: skip
         for link in links
     ]
     shares = distribute(slots)

@@ -61,7 +61,8 @@ class ListQuery:
         if any(k in changes for k in ("q", "state", "group", "mine", "sort", "dir", "per")):
             merged["page"] = 1
         merged.update(changes)
-        defaults = {"sort": "id", "dir": "desc", "page": 1, "per": 25}
+        default_dir = "desc" if merged["sort"] in ("id", "created") else "asc"
+        defaults = {"sort": "id", "dir": default_dir, "page": 1, "per": 25}
         clean = {k: v for k, v in merged.items() if v not in ("", None, False) and defaults.get(k) != v}
         return "?" + urlencode(clean) if clean else "?"
 

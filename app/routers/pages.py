@@ -102,12 +102,7 @@ def create_campaign(
 def streams_page(request: Request, keitaro_id: int, kt: Kt, db: Db, settings: Conf) -> Response:
     campaign = db.scalar(select(Campaign).where(Campaign.keitaro_id == keitaro_id))
     if campaign is None:
-        try:
-            campaign = import_campaign(db, kt, keitaro_id)
-        except KeitaroError as exc:
-            return templates.TemplateResponse(
-                request, "error.html", {"error": exc.message}, status_code=502
-            )
+        campaign = import_campaign(db, kt, keitaro_id)  # Keitaro 404 → "not found" page via app handler
     return templates.TemplateResponse(
         request,
         "streams.html",

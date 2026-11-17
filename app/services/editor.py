@@ -135,6 +135,8 @@ def cancel(db: Session, stream_id: int) -> Stream:
 
 def push(db: Session, kt: KeitaroClient, stream_id: int) -> Stream:
     stream = get_stream(db, stream_id)
+    if not stream.is_dirty:
+        raise DomainError("В потоке нет неопубликованных изменений — обновите страницу")
     if error := stream.publish_error:
         raise DomainError(error)
     active = sorted(stream.active_offers, key=lambda link: link.position)

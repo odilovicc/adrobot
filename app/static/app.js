@@ -36,6 +36,27 @@
     });
   }
 
+  const SELECT2_RU = {
+    errorLoading: () => "Не удалось загрузить результаты",
+    inputTooShort: () => "Введите ещё символы",
+    loadingMore: () => "Загружаем ещё…",
+    noResults: () => "Ничего не найдено",
+    searching: () => "Ищем…",
+    removeAllItems: () => "Очистить",
+  };
+
+  // Typing then pressing Enter before the debounced search returns would pick the highlighted
+  // item of the *previous* results. Hold Enter until fresh results arrive, then apply it.
+  document.addEventListener("keydown", (e) => {
+    const f = e.target;
+    if (e.key !== "Enter" || !f.classList || !f.classList.contains("select2-search__field")) return;
+    if (f.dataset.pending === "1") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      f.dataset.enterQueued = "1";
+    }
+  }, true);
+
   function initOfferSearch($root) {
     $root.find("select[data-offer-search]").each(function () {
       const $s = $(this);
@@ -46,6 +67,7 @@
         placeholder: "Поиск оффера по ID или имени",
         allowClear: true,
         minimumInputLength: 0,
+        language: SELECT2_RU,
         ajax: {
           url: "/api/offers",
           delay: 250,
@@ -53,14 +75,33 @@
             const streamId = $s.closest(".stream").data("id");
             return streamId ? { q: params.term || "", stream_id: streamId } : { q: params.term || "" };
           },
-          processResults: (data) => data,
-          error: (xhr) => { if (xhr.statusText !== "abort") toast("Не удалось загрузить офферы"); },
+          processResults: (data) => {
+            const field = document.querySelector(".select2-container--open .select2-search__field");
+            if (field) {
+              field.dataset.pending = "0";
+              if (field.dataset.enterQueued === "1") {
+                field.dataset.enterQueued = "0";
+                setTimeout(() => $(field).trigger($.Event("keydown", { which: 13, keyCode: 13, key: "Enter" })), 0);
+              }
+            }
+            return data;
+          },
+          error: (xhr) => {
+            const field = document.querySelector(".select2-container--open .select2-search__field");
+            if (field) { field.dataset.pending = "0"; field.dataset.enterQueued = "0"; }
+            if (xhr.statusText !== "abort") toast("Не удалось загрузить офферы");
+          },
         },
       });
       // Select2 + jQuery ≥ 3.6 doesn't focus the search box on open.
       $s.on("select2:open", () => {
         const search = document.querySelector(".select2-container--open .select2-search__field");
-        if (search) search.focus();
+        if (!search) return;
+        search.focus();
+        if (!search.dataset.guarded) {
+          search.dataset.guarded = "1";
+          search.addEventListener("input", () => { search.dataset.pending = "1"; });
+        }
       });
     });
   }
@@ -72,17 +113,44 @@
   }
 
   function applyRemovedFilter() {
+    if (!$("#toggle-removed").length) return;
     const hide = $("#toggle-removed").attr("aria-pressed") === "false";
+    try { localStorage.setItem("adrobot-hide-removed", hide ? "1" : "0"); } catch (e) { /* ignore */ }
     $("tr.offer-removed").toggleClass("d-none", hide);
   }
 
-  function swapCard($card, html) {
+  // Keep keyboard users where they were: re-focus the matching control in the re-rendered card.
+  const FOCUS_SWAP = { remove: "restore", restore: "remove" };
+  function focusTarget($card) {
+    const el = document.activeElement;
+    if (!el || !$card[0].contains(el)) return null;
+    const $el = $(el).closest("[data-action], [data-offer-search], .select2-selection");
+    return { link: $(el).closest("tr").data("link"), action: $el.data("action") || null };
+  }
+  function restoreFocus($new, t) {
+    if (!t) return;
+    const actions = [t.action, FOCUS_SWAP[t.action], "edit-share"].filter(Boolean);
+    let target = null;
+    for (const a of actions) {
+      target = t.link ? $new.find(`tr[data-link="${t.link}"] [data-action="${a}"]`)[0] : $new.find(`[data-action="${a}"]`)[0];
+      if (target) break;
+    }
+    if (!target) {
+      const th = $new.find(".stream-row th")[0];
+      if (th) { th.tabIndex = -1; target = th; }
+    }
+    if (target) target.focus({ preventScroll: true });
+  }
+
+  function swapCard($card, html, focus) {
     const $new = $(html);
+    const t = focus === undefined ? focusTarget($card) : focus;
     destroyOfferSearch($card);
     $card.replaceWith($new);
     initOfferSearch($new);
     applyRemovedFilter();
     updateDirtyBar();
+    restoreFocus($new, t);
     return $new;
   }
 
@@ -124,18 +192,24 @@
       }
       default: return;
     }
+    const focus = focusTarget($card);  // before disabling: disabled buttons drop focus
     $card.find("button").prop("disabled", true);
     if (action === "push") busy($btn, true);
     req.done((html) => {
-      swapCard($card, html);
+      swapCard($card, html, focus);
       if (action === "push") toast("Опубликовано в Keitaro", "success");
-    }).fail(() => { $card.find("button").prop("disabled", false); busy($btn, false); });
+    }).fail((xhr) => {
+      $card.find("button").prop("disabled", false);
+      busy($btn, false);
+      if (xhr.status === 404 || xhr.status === 400) reloadCard($card);  // page was stale
+    });
   });
 
   // The input lives until the card is re-rendered. replaceWith() wipes jQuery data and then
   // fires blur on the detached input, so the "already handled" flag is a closure variable.
   function bindShareInput($input) {
     let done = false;
+    let pendingClick = null;
     const $card = $input.closest(".stream");
     const linkId = $input.closest("tr").data("link");
 
@@ -150,7 +224,14 @@
         return;
       }
       post(`/api/stream-offers/${linkId}/share`, { share: value })
-        .done((html) => swapCard($card, html))
+        .done((html) => {
+          const $new = swapCard($card, html, null);
+          if (pendingClick) {
+            const sel = pendingClick.link ? `tr[data-link="${pendingClick.link}"] [data-action="${pendingClick.action}"]` : `[data-action="${pendingClick.action}"]`;
+            const btn = $new.find(sel)[0];
+            if (btn) btn.click();
+          }
+        })
         .fail(() => reloadCard($card));
     }
 
@@ -158,7 +239,14 @@
       if (e.key === "Enter") { e.preventDefault(); commit(); }
       if (e.key === "Escape") { done = true; reloadCard($card); }
     });
-    $input.on("blur", commit);
+    $input.on("blur", (e) => {
+      const next = e.relatedTarget && $(e.relatedTarget).closest("[data-action]");
+      if (next && next.length && $card[0].contains(next[0]) && next.data("action") !== "edit-share") {
+        // The user clicked e.g. Remove while editing: save the share first, then replay that click.
+        pendingClick = { link: next.closest("tr").data("link"), action: next.data("action") };
+      }
+      commit();
+    });
   }
 
   function reloadCard($card) {
@@ -349,7 +437,7 @@
     if (!$form.length) return;
     $form.find("select[data-searchable]").each(function () {
       const $s = $(this);
-      $s.select2({ theme: "bootstrap-5", width: "100%", placeholder: $s.data("placeholder"), allowClear: false });
+      $s.select2({ theme: "bootstrap-5", width: "100%", placeholder: $s.data("placeholder"), allowClear: false, language: SELECT2_RU });
       $s.on("select2:open", () => {
         const search = document.querySelector(".select2-container--open .select2-search__field");
         if (search) search.focus();
@@ -392,6 +480,17 @@
   }
 
   $(function () {
+    const url = new URL(location.href);
+    if (url.searchParams.has("created")) {
+      url.searchParams.delete("created");
+      history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+    }
+    let hideRemoved = false;
+    try { hideRemoved = localStorage.getItem("adrobot-hide-removed") === "1"; } catch (e) { /* ignore */ }
+    if (hideRemoved && $("#toggle-removed").length) {
+      $("#toggle-removed").attr("aria-pressed", "false").find("span").text("Show all offers");
+    }
+    applyRemovedFilter();
     initOfferSearch($(document));
     initCreator();
     localizeTimes($(document));

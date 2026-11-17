@@ -43,8 +43,10 @@ class KeitaroClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             resp = self.http.request(method, path, **kwargs)
+        except httpx.TimeoutException as exc:
+            raise KeitaroError(f"Keitaro не ответил вовремя ({self.http.base_url.host}). Попробуйте ещё раз") from exc
         except httpx.HTTPError as exc:
-            raise KeitaroError(f"Keitaro недоступен: {exc}") from exc
+            raise KeitaroError(f"Keitaro недоступен: не удалось подключиться к {self.http.base_url.host}") from exc
         if resp.status_code >= 400:
             raise KeitaroError(_error_text(resp), resp.status_code)
         if not resp.content:

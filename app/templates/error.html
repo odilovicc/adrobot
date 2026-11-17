@@ -1,5 +1,13 @@
 {% extends "base.html" %}
+{% block title %}{{ title or 'Ошибка' }} · Adrobot{% endblock %}
 {% block content %}
-<div class="alert alert-danger">{{ error }}</div>
-<a href="/">← К списку кампаний</a>
+<div class="empty card error-card">
+  <i class="bi {{ 'bi-signpost-split' if status == 404 else 'bi-cloud-slash' if status == 502 else 'bi-exclamation-octagon' }}" aria-hidden="true"></i>
+  <h1 class="h5 mb-1">{{ title or 'Ошибка' }}</h1>
+  <p class="text-secondary mb-3">{{ error }}</p>
+  <div class="d-flex gap-2 justify-content-center">
+    <a class="btn btn-primary btn-sm" href="/"><i class="bi bi-arrow-left" aria-hidden="true"></i> К списку кампаний</a>
+    {% if status == 502 %}<button class="btn btn-outline-secondary btn-sm" onclick="location.reload()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Повторить</button>{% endif %}
+  </div>
+</div>
 {% endblock %}
