@@ -5,7 +5,8 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="/">Кампании</a></li>
-    <li class="breadcrumb-item active text-truncate" aria-current="page">{{ campaign.name }}</li>
+    <li class="breadcrumb-item text-truncate">{{ campaign.name }}</li>
+    <li class="breadcrumb-item active" aria-current="page">Keitaro Streams</li>
   </ol>
 </nav>
 
@@ -20,13 +21,14 @@
       <span id="stream-count">{{ campaign.streams | length }} {{ 'поток' if campaign.streams | length == 1 else ('потока' if campaign.streams | length in [2, 3, 4] else 'потоков') }}</span>
     </div>
   </div>
-  <div class="toolbar">
-    <button class="btn btn-primary" id="fetch-btn" data-url="/api/campaigns/{{ campaign.keitaro_id }}/fetch">
-      <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span><i class="bi bi-cloud-download" aria-hidden="true"></i> Fetch streams from KT
-    </button>
-    <button class="btn btn-outline-secondary" id="toggle-removed" aria-pressed="true"><i class="bi bi-archive" aria-hidden="true"></i> <span>Hide removed</span></button>
-    <a class="btn btn-outline-secondary" href="{{ kt_url }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> View in KT</a>
-  </div>
+</div>
+
+<div class="editor-toolbar">
+  <button class="btn btn-light btn-caps border" id="fetch-btn" data-url="/api/campaigns/{{ campaign.keitaro_id }}/fetch">
+    <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span>Fetch streams from KT <i class="bi bi-download" aria-hidden="true"></i>
+  </button>
+  <a class="btn btn-light btn-caps border" href="{{ kt_url }}" target="_blank" rel="noopener">View in KT <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+  <button class="btn btn-light btn-caps border ms-auto" id="toggle-removed" aria-pressed="true"><span>Hide removed</span></button>
 </div>
 
 {% if created %}

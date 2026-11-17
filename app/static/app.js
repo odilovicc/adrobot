@@ -164,7 +164,7 @@
   function reloadCard($card) {
     const campaign = $("#streams").data("campaign");
     $.get(`/api/campaigns/${campaign}/streams`).done((html) => {
-      const $fresh = $(html).filter(`#${$card.attr("id")}`);
+      const $fresh = $("<div>").html(html).find(`#${$card.attr("id")}`);
       if ($fresh.length) swapCard($card, $fresh[0].outerHTML);
     });
   }

@@ -1,132 +1,86 @@
+{# One stream = one <tbody> of the shared streams table (layout from the demo video). #}
 {% set dirty = stream.is_dirty %}
 {% set total = stream.total_share %}
 {% set publish_error = stream.publish_error %}
-{% set removed_count = stream.offers | selectattr('state', 'equalto', 'removed') | list | length %}
-<section class="card stream {{ 'stream-dirty' if dirty }}" id="stream-{{ stream.id }}" data-id="{{ stream.id }}"
-         data-name="{{ stream.name }}" data-dirty="{{ 'true' if dirty else 'false' }}" aria-labelledby="stream-{{ stream.id }}-title">
-  <header class="stream-head">
-    <div class="stream-title">
-      <span class="stream-pos mono" title="Позиция потока в кампании">{{ stream.position }}</span>
-      <div class="min-w-0">
-        <h2 class="h6 mb-0" id="stream-{{ stream.id }}-title">{{ stream.name }}</h2>
-        <div class="stream-meta">
-          <span class="schema schema-{{ stream.schema or 'none' }}"><i class="bi {{ 'bi-signpost-split' if stream.schema == 'redirect' else 'bi-collection' }}" aria-hidden="true"></i> {{ stream.schema or '—' }}</span>
-          <span class="mono">id {{ stream.keitaro_id }}</span>
-          {% if stream.state != 'active' %}<span class="status status-{{ stream.state }}"><span class="dot" aria-hidden="true"></span>{{ stream.state }}</span>{% endif %}
-          {% if stream.offers %}<span>{{ stream.active_offers | length }} {{ 'оффер' if stream.active_offers | length == 1 else 'офферов' if stream.active_offers | length > 4 or stream.active_offers | length == 0 else 'оффера' }}{% if removed_count %} · {{ removed_count }} в архиве{% endif %}</span>{% endif %}
-        </div>
-      </div>
-    </div>
-    <div class="stream-actions">
-      {% if dirty %}<span class="badge badge-dirty"><i class="bi bi-pencil" aria-hidden="true"></i> не опубликовано</span>{% endif %}
-      {% if stream.offers %}
-        <span class="sum {{ 'sum-bad' if publish_error else 'sum-ok' }}" title="Сумма весов офферов, получающих трафик">
-          <i class="bi {{ 'bi-exclamation-triangle' if publish_error else 'bi-check2' }}" aria-hidden="true"></i> Σ <span class="mono">{{ total }}%</span>
-        </span>
-      {% endif %}
-      {% if dirty %}
-        <button class="btn btn-sm btn-outline-secondary" data-action="cancel"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Cancel</button>
-        <button class="btn btn-sm btn-success" data-action="push" {{ 'disabled' if publish_error }} {% if publish_error %}title="{{ publish_error }}"{% endif %}>
-          <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span><i class="bi bi-cloud-upload" aria-hidden="true"></i> Push to KT
-        </button>
-      {% endif %}
-    </div>
-  </header>
-
-  {% if dirty and publish_error %}
-    <div class="stream-alert" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ publish_error }}</div>
-  {% endif %}
-
-  {% if stream.offers %}
-  <div class="table-responsive">
-  <table class="table align-middle mb-0 offers-table">
-    <thead><tr>
-      <th scope="col">Оффер</th>
-      <th scope="col" class="share-col">Share</th>
-      <th scope="col" class="text-secondary d-none d-lg-table-cell">Stats</th>
-      <th scope="col" class="text-secondary d-none d-lg-table-cell">Trends</th>
-      <th scope="col" class="text-end"><span class="visually-hidden">Действия</span></th>
-    </tr></thead>
-    <tbody>
-    {% for link in stream.offers %}
-      {% set removed = link.state == 'removed' %}
-      {% set changed = link.share != link.published_share and not link.is_new %}
-      <tr class="{{ 'offer-removed' if removed }} {{ 'offer-new' if link.is_new }} {{ 'offer-changed' if changed and not removed }}" data-link="{{ link.id }}">
-        <td><div class="offer-cell">
-          <span class="mono text-secondary">#{{ link.offer_id }}</span>
-          <span class="offer-name">{{ link.offer.name }}</span>
-          {% if removed %}<span class="badge badge-muted">removed</span>{% endif %}
-          {% if link.is_new %}<span class="badge badge-new">new</span>{% endif %}
-          {% if link.kt_disabled and not removed %}<span class="badge badge-muted" title="Выключен в Keitaro: не получает трафик и не входит в 100%"><i class="bi bi-pause-circle" aria-hidden="true"></i> disabled in KT</span>{% endif %}
-        </div></td>
-        <td class="share-col">
-          <div class="share-line">
-            {% if removed %}
-              <span class="share-static mono">0%</span>
-            {% elif link.kt_disabled %}
-              <span class="share-static mono text-secondary" title="Выключен в Keitaro: вес сохраняется, но не входит в 100%">{{ link.share }}%</span>
-            {% else %}
-              <button class="share-value mono" data-action="edit-share" data-share="{{ link.share }}" title="Задать вес вручную — он закрепится" aria-label="Вес {{ link.share }}%, изменить">{{ link.share }}%</button>
-              <button class="pin {{ 'pin-on' if link.pinned }}" data-action="pin" data-pinned="{{ 'true' if link.pinned else 'false' }}"
-                      title="{{ 'Открепить вес' if link.pinned else 'Закрепить вес' }}" aria-label="{{ 'Открепить вес' if link.pinned else 'Закрепить вес' }}" aria-pressed="{{ 'true' if link.pinned else 'false' }}">
-                <i class="bi {{ 'bi-pin-angle-fill' if link.pinned else 'bi-pin-angle' }}" aria-hidden="true"></i>
-              </button>
-            {% endif %}
-            {% if changed %}<span class="was mono" title="Сейчас в Keitaro">было {{ link.published_share }}%</span>{% endif %}
-          </div>
-          {% if not removed %}
-            <div class="share-bar" aria-hidden="true"><span style="width: {{ [link.share, 100] | min }}%"></span></div>
-          {% endif %}
-        </td>
-        <td class="text-secondary d-none d-lg-table-cell">—</td>
-        <td class="text-secondary d-none d-lg-table-cell">—</td>
-        <td class="text-end">
-          {% if removed %}
-            <button class="btn btn-sm btn-outline-primary text-nowrap" data-action="restore"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Bring back</button>
-          {% else %}
-            <button class="btn btn-sm btn-ghost-danger text-nowrap" data-action="remove" aria-label="Remove: убрать оффер #{{ link.offer_id }} из потока"><i class="bi bi-trash3" aria-hidden="true"></i> Remove</button>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-
-  <div class="stream-foot">
-    {% if stream.accepts_offers %}
-      <div class="add-offer">
-        <label class="visually-hidden" for="add-{{ stream.id }}">Добавить оффер в поток {{ stream.name }}</label>
-        <select class="form-select form-select-sm" id="add-{{ stream.id }}" data-offer-search></select>
-        <button class="btn btn-sm btn-primary text-nowrap" data-action="add"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add</button>
-      </div>
-    {% else %}
-      <div class="rule">
-        {% if stream.filters %}
-          <span class="rule-label">Если</span>
-          {% for f in stream.filters %}
-            <span class="rule-filter">
-              <span class="text-secondary">{{ f.name }}</span>
-              <span class="rule-op">{{ 'не' if f.mode == 'reject' else '' }}</span>
-              {% if f.payload is iterable and f.payload is not string and f.payload is not mapping %}
-                {% for v in f.payload %}<span class="chip mono">{{ v }}</span>{% endfor %}
-              {% elif f.payload %}<span class="chip mono">{{ f.payload }}</span>{% endif %}
+{% set filter_names = stream.filters | map(attribute='name') | join(', ') %}
+<tbody class="stream {{ 'stream-dirty' if dirty }}" id="stream-{{ stream.id }}" data-id="{{ stream.id }}"
+       data-name="{{ stream.name }}" data-dirty="{{ 'true' if dirty else 'false' }}" aria-labelledby="stream-{{ stream.id }}-title">
+  <tr class="stream-row">
+    <th scope="rowgroup" colspan="5">
+      <div class="stream-row-inner">
+        <div class="stream-title-line">
+          <span id="stream-{{ stream.id }}-title"><span class="stream-label">Stream:</span> <strong>{{ stream.name }}</strong> <span class="text-secondary">(#{{ stream.position }})</span></span>
+          <span class="stream-sub">filter by {{ filter_names or 'None' }}, stream_id <span class="mono">{{ stream.keitaro_id }}</span>, clicks today: <span class="mono">{{ stream.clicks_today if stream.clicks_today is not none else '—' }}</span>{% if stream.state != 'active' %}, {{ stream.state }}{% endif %}</span>
+          {% if stream.offers %}
+            <span class="stream-flags">
+              {% if dirty %}<span class="badge badge-dirty"><i class="bi bi-pencil" aria-hidden="true"></i> не опубликовано</span>{% endif %}
+              <span class="sum {{ 'sum-bad' if publish_error else 'sum-ok' }}" title="Сумма весов офферов, получающих трафик">Σ <span class="mono">{{ total }}%</span></span>
             </span>
-            {% if not loop.last %}<span class="rule-label">{{ 'или' if stream.filter_or else 'и' }}</span>{% endif %}
-          {% endfor %}
-        {% else %}
-          <span class="rule-label">Без фильтров</span>
+          {% endif %}
+        </div>
+        {% if dirty %}
+          <div class="stream-buttons">
+            <button class="btn btn-sm btn-primary btn-caps" data-action="push" {{ 'disabled' if publish_error }} {% if publish_error %}title="{{ publish_error }}"{% endif %}>
+              <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span><i class="bi bi-cloud-upload" aria-hidden="true"></i> Push to KT
+            </button>
+            <button class="btn btn-sm btn-light btn-caps border" data-action="cancel"><i class="bi bi-x-lg" aria-hidden="true"></i> Cancel</button>
+            {% if publish_error %}<span class="stream-error" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ publish_error }}</span>{% endif %}
+          </div>
         {% endif %}
-        <span class="rule-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
-        <span class="text-secondary">{{ stream.action_type or 'action' }}</span>
-        {% if stream.action_payload %}
-          {% if stream.action_payload.startswith('http') %}
-            <a class="mono" href="{{ stream.action_payload }}" target="_blank" rel="noopener noreferrer">{{ stream.action_payload }}</a>
-          {% else %}<span class="mono">{{ stream.action_payload }}</span>{% endif %}
-        {% endif %}
-        {% if not stream.filters and not stream.action_type %}<span class="text-secondary small">{{ stream.summary }}</span>{% endif %}
       </div>
-    {% endif %}
-  </div>
-</section>
+    </th>
+  </tr>
+
+  {% for link in stream.offers %}
+    {% set removed = link.state == 'removed' %}
+    {% set changed = link.share != link.published_share and not link.is_new %}
+    <tr class="offer-row {{ 'offer-removed' if removed }} {{ 'offer-new' if link.is_new }}" data-link="{{ link.id }}">
+      <td class="col-offer">
+        <span class="offer-name">{{ link.offer.name }}</span>{% if removed %} <span class="removed-tag">(removed)</span>{% endif %}
+        {% if link.offer.preview_url %}<a class="preview-link" href="{{ link.offer.preview_url }}" target="_blank" rel="noopener noreferrer" aria-label="Preview оффера {{ link.offer.name }}">(preview)</a>{% endif %}
+        <div class="offer-meta">
+          <span class="mono">#{{ link.offer_id }}</span>
+          {% if link.is_new %}<span class="badge badge-new">new</span>{% endif %}
+          {% if link.kt_disabled and not removed %}<span class="badge badge-muted" title="Выключен в Keitaro: не получает трафик и не входит в 100%">disabled in KT</span>{% endif %}
+        </div>
+      </td>
+      <td class="share-col">
+        <div class="share-line">
+          {% if removed %}
+            <span class="share-static mono">0%</span>
+          {% elif link.kt_disabled %}
+            <span class="share-static mono text-secondary" title="Выключен в Keitaro: вес сохраняется, но не входит в 100%">{{ link.share }}%</span>
+          {% else %}
+            <button class="share-value mono" data-action="edit-share" data-share="{{ link.share }}" title="Задать вес вручную — он закрепится" aria-label="Вес {{ link.share }}%, изменить">{{ link.share }}%</button>
+            <button class="pin {{ 'pin-on' if link.pinned }}" data-action="pin" data-pinned="{{ 'true' if link.pinned else 'false' }}"
+                    title="{{ 'Открепить вес' if link.pinned else 'Закрепить вес' }}" aria-label="{{ 'Открепить вес' if link.pinned else 'Закрепить вес' }}" aria-pressed="{{ 'true' if link.pinned else 'false' }}">
+              <i class="bi {{ 'bi-pin-fill' if link.pinned else 'bi-pin' }}" aria-hidden="true"></i>
+            </button>
+          {% endif %}
+        </div>
+        {% if changed %}<div class="was mono" title="Сейчас в Keitaro">было {{ link.published_share }}%</div>{% endif %}
+      </td>
+      <td class="col-stats d-none d-lg-table-cell"></td>
+      <td class="col-trends d-none d-lg-table-cell"></td>
+      <td class="text-end">
+        {% if removed %}
+          <button class="btn btn-sm btn-light btn-caps border text-nowrap" data-action="restore" aria-label="Bring back: вернуть оффер #{{ link.offer_id }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> <span class="btn-text">Bring back</span></button>
+        {% else %}
+          <button class="btn btn-sm btn-light btn-caps border text-nowrap" data-action="remove" aria-label="Remove: убрать оффер #{{ link.offer_id }} из потока"><i class="bi bi-trash3-fill" aria-hidden="true"></i> <span class="btn-text">Remove</span></button>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+
+  {% if stream.accepts_offers %}
+    <tr class="add-row">
+      <td colspan="5">
+        <div class="add-offer">
+          <label class="visually-hidden" for="add-{{ stream.id }}">Добавить оффер в поток {{ stream.name }}</label>
+          <select class="form-select form-select-sm" id="add-{{ stream.id }}" data-offer-search></select>
+          <button class="btn btn-sm btn-light btn-caps border text-nowrap" data-action="add" aria-label="Add: добавить выбранный оффер"><i class="bi bi-plus-lg" aria-hidden="true"></i> <span class="btn-text">Add</span></button>
+        </div>
+      </td>
+    </tr>
+  {% endif %}
+</tbody>

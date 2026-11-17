@@ -314,3 +314,27 @@ def test_order_survives_push_although_keitaro_reorders(editor, db, kt_state):
     assert [link.offer_id for link in stream(db).offers] == [3747, 3748, 3749, OFFER4]
     ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
     assert [link.offer_id for link in stream(db).offers] == [3747, 3748, 3749, OFFER4]
+
+
+def test_editor_layout_matches_video(editor, db):
+    page = editor.get(f"/campaigns/{CAMPAIGN}/streams").text
+    # one table, each stream is a header row "Stream: Flow 2 (#2) filter by …, stream_id …, clicks today: N"
+    assert page.count('id="streams-table"') == 1
+    assert "stream_id <span class=\"mono\">564221</span>, clicks today: <span class=\"mono\">1</span>" in page
+    assert "stream_id <span class=\"mono\">564220</span>, clicks today: <span class=\"mono\">3</span>" in page
+    # redirect stream: nothing about where it goes (video 0:45–1:27)
+    assert "google.com" not in page
+    # offers have a (preview) link
+    assert '>(preview)</a>' in page and "https://offers.example/3747" in page
+
+
+def test_clicks_today_unavailable_shows_dash(editor, db, kt_state, monkeypatch):
+    from app.keitaro import KeitaroClient, KeitaroError
+
+    def boom(self, campaign_id):
+        raise KeitaroError("report disabled", 403)
+
+    monkeypatch.setattr(KeitaroClient, "stream_clicks_today", boom)
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    assert stream(db).clicks_today is None
+    assert "clicks today: <span class=\"mono\">—</span>" in editor.get(f"/campaigns/{CAMPAIGN}/streams").text

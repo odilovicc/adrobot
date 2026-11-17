@@ -34,6 +34,7 @@ class Offer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(255))
     state: Mapped[str] = mapped_column(String(32), default="active")
+    preview_url: Mapped[str] = mapped_column(String(2000), default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
@@ -53,6 +54,8 @@ class Stream(Base):
     action_payload: Mapped[str] = mapped_column(String(2000), default="", server_default="")
     # Keitaro filters as-is: [{"name": "country", "mode": "accept", "payload": ["AU"]}, ...]
     filters: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    # From Keitaro's report at the last Fetch; None if the report wasn't available.
+    clicks_today: Mapped[int | None] = mapped_column(default=None)
 
     campaign: Mapped[Campaign] = relationship(back_populates="streams")
     offers: Mapped[list["StreamOffer"]] = relationship(

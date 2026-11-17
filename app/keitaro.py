@@ -97,6 +97,26 @@ class KeitaroClient:
                 self._offers_at = time.monotonic()
             return self._offers or []
 
+    def offer_preview_url(self, offer: dict[str, Any]) -> str:
+        """Where "(preview)" points: the offer's own URL, or its local lander on the tracker."""
+        for key in ("preview_path", "action_payload"):
+            value = offer.get(key)
+            if isinstance(value, str) and value.startswith(("http://", "https://")):
+                return value
+        local = offer.get("local_path")
+        if isinstance(local, str) and local:
+            base = str(self.http.base_url).split("/admin_api", 1)[0].rstrip("/")
+            return f"{base}{local if local.startswith('/') else '/' + local}"
+        return ""
+
+    def stream_clicks_today(self, campaign_id: int) -> dict[int, int]:
+        """Clicks per stream since midnight UTC (Keitaro report API)."""
+        body = {"range": {"interval": "today", "timezone": "UTC"}, "dimensions": ["stream_id"],
+                "measures": ["clicks"],
+                "filters": [{"name": "campaign_id", "operator": "EQUALS", "expression": campaign_id}]}  # fmt: skip
+        rows = self._request("POST", "/report/build", json=body).get("rows") or []
+        return {int(r["stream_id"]): int(r.get("clicks") or 0) for r in rows if r.get("stream_id")}
+
     def invalidate_offers(self) -> None:
         with self._lock:
             self._offers = None

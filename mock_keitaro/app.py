@@ -49,6 +49,7 @@ class MockState:
                                 {"id": 2, "name": "Propeller Ads", "state": "active"}]  # fmt: skip
         # Failure injection for tests: number of next POST /streams calls to fail.
         self.fail_stream_creates = 0
+        self.clicks_today: dict[int, int] = {564220: 3, 564221: 1}
         self.requests: list[tuple[str, str]] = []
         self._seed()
         self.seed_ids = set(self.campaigns)
@@ -257,6 +258,15 @@ def delete_stream(sid: int) -> dict[str, Any]:
     stream = _get(state.streams, sid, "Stream")
     stream["state"] = "deleted"
     return stream
+
+
+@api.post("/report/build")
+def report_build(body: dict[str, Any]) -> dict[str, Any]:
+    """Only what Adrobot asks for: clicks today per stream of one campaign (shape verified 2026-11-17)."""
+    cid = next((f.get("expression") for f in body.get("filters") or [] if f.get("name") == "campaign_id"), None)
+    rows = [{"stream_id": sid, "clicks": state.clicks_today.get(sid, 0)}
+            for sid, s in state.streams.items() if s["campaign_id"] == cid and state.clicks_today.get(sid)]  # fmt: skip
+    return {"rows": rows, "total": len(rows)}
 
 
 @api.get("/offers")

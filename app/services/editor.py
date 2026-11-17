@@ -61,7 +61,8 @@ def add_offer(db: Session, kt: KeitaroClient, stream_id: int, offer_id: int) -> 
     kt_offer = kt.get_offer(offer_id)
     if kt_offer is None:
         raise DomainError(f"Оффер #{offer_id} не найден в Keitaro")
-    upsert_offer(db, offer_id, kt_offer.get("name"), kt_offer.get("state") or "active")
+    upsert_offer(db, offer_id, kt_offer.get("name"), kt_offer.get("state") or "active",
+                 preview=kt.offer_preview_url(kt_offer))
 
     position = max((link.position for link in stream.offers), default=-1) + 1
     stream.offers.append(

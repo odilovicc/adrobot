@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.keitaro import KeitaroClient
+from app.keitaro import KeitaroClient, KeitaroError
 from app.models import Campaign, Offer, OfferState, Stream, StreamOffer
 from app.services.weights import Slot, WeightsError, distribute
 
@@ -24,7 +24,8 @@ def import_campaign(db: Session, kt: KeitaroClient, keitaro_id: int) -> Campaign
     campaign.alias = kt_campaign.get("alias") or ""
     campaign.fetched_at = datetime.now(UTC).replace(tzinfo=None)
 
-    names = _offer_names(kt, kt_streams)
+    names, previews = _offer_meta(kt, kt_streams)
+    clicks = _clicks_today(kt, keitaro_id)
     by_kid = {s.keitaro_id: s for s in campaign.streams}
     seen: set[int] = set()
     for kt_stream in kt_streams:
@@ -33,7 +34,8 @@ def import_campaign(db: Session, kt: KeitaroClient, keitaro_id: int) -> Campaign
             stream = Stream(keitaro_id=kt_stream["id"])
             campaign.streams.append(stream)
         seen.add(kt_stream["id"])
-        apply_kt_stream(db, stream, kt_stream, names)
+        apply_kt_stream(db, stream, kt_stream, names, previews)
+        stream.clicks_today = None if clicks is None else clicks.get(kt_stream["id"], 0)
 
     for kid, stream in by_kid.items():
         if kid not in seen:  # deleted in Keitaro
@@ -44,7 +46,8 @@ def import_campaign(db: Session, kt: KeitaroClient, keitaro_id: int) -> Campaign
     return campaign
 
 
-def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], names: dict[int, str]) -> None:
+def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], names: dict[int, str],
+                    previews: dict[int, str] | None = None) -> None:  # fmt: skip
     """Make ``kt_stream`` the new published state of ``stream``."""
     stream.name = kt_stream.get("name") or f"Stream #{kt_stream['id']}"
     stream.position = kt_stream.get("position") or 0
@@ -64,7 +67,7 @@ def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], name
     in_kt: list[StreamOffer] = []
     for kt_offer in kt_offers:
         oid = int(kt_offer["offer_id"])
-        upsert_offer(db, oid, names.get(oid))
+        upsert_offer(db, oid, names.get(oid), preview=(previews or {}).get(oid))
         link = links.pop(oid, None)
         if link is None:
             link = StreamOffer(offer_id=oid, pinned=False)
@@ -166,20 +169,34 @@ def _filter_text(f: dict[str, Any]) -> str:
     return f"{name}{op}{values}" if values else name
 
 
-def _offer_names(kt: KeitaroClient, kt_streams: list[dict[str, Any]]) -> dict[int, str]:
+def _offer_meta(kt: KeitaroClient, kt_streams: list[dict[str, Any]]) -> tuple[dict[int, str], dict[int, str]]:
     if not any(s.get("offers") for s in kt_streams):
-        return {}
-    return {o["id"]: o.get("name") or f"Offer #{o['id']}" for o in kt.list_offers()}
+        return {}, {}
+    offers = kt.list_offers()
+    names = {o["id"]: o.get("name") or f"Offer #{o['id']}" for o in offers}
+    return names, {o["id"]: kt.offer_preview_url(o) for o in offers}
 
 
-def upsert_offer(db: Session, offer_id: int, name: str | None, state: str = "active") -> Offer:
+def _clicks_today(kt: KeitaroClient, campaign_id: int) -> dict[int, int] | None:
+    """Clicks per stream for "clicks today" in the stream header; None if the report is unavailable."""
+    try:
+        return kt.stream_clicks_today(campaign_id)
+    except KeitaroError:
+        return None
+
+
+def upsert_offer(db: Session, offer_id: int, name: str | None, state: str = "active",
+                 preview: str | None = None) -> Offer:  # fmt: skip
     offer = db.get(Offer, offer_id)
     if offer is None:
-        offer = Offer(id=offer_id, name=name or f"Offer #{offer_id}", state=state)
+        offer = Offer(id=offer_id, name=name or f"Offer #{offer_id}", state=state, preview_url=preview or "")
         db.add(offer)
         db.flush()
-    elif name and offer.name != name:
+        return offer
+    if name and offer.name != name:
         offer.name = name
+    if preview is not None and offer.preview_url != preview:
+        offer.preview_url = preview
     return offer
 
 
