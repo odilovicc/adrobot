@@ -8,6 +8,10 @@
 - **Редактор** — Fetch / Add / Remove / Bring back / Pin / ручной вес / Push / Cancel, архив удалённых офферов,
   «жёлтые» неопубликованные потоки — как в демо-видео.
 
+![Редактор: закреплённые 25%, Bring back → 38/37, поток не опубликован](docs/screenshots/editor.jpg)
+
+![Создаватор кампаний](docs/screenshots/creator.jpg)
+
 Стек: FastAPI, SQLAlchemy 2.0 + Alembic (SQLite), httpx, Jinja2 + Bootstrap 5 + jQuery + Select2.
 
 ## Запуск
