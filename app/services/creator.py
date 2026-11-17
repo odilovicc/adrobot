@@ -1,9 +1,11 @@
 """Campaign creator: name + geo + offer → ready-to-run campaign with two streams."""
 
+import gettext
 import re
 import secrets
 import string
 from dataclasses import dataclass, field
+from functools import cache
 
 import pycountry
 from sqlalchemy.orm import Session
@@ -17,6 +19,24 @@ from app.services.sync import import_campaign
 ALIAS_ALPHABET = string.ascii_letters + string.digits
 ALIAS_ATTEMPTS = 3
 ISO_ALPHA2 = frozenset(c.alpha_2 for c in pycountry.countries)
+
+
+@dataclass(frozen=True)
+class Country:
+    code: str
+    name: str  # Russian, shown to the user
+    name_en: str  # searchable too
+
+
+@cache
+def country_choices() -> tuple[Country, ...]:
+    """All ISO 3166-1 countries with Russian names, sorted by name (for the creator's country picker)."""
+    ru = gettext.translation("iso3166-1", pycountry.LOCALES_DIR, languages=["ru"], fallback=True)
+    items = []
+    for c in pycountry.countries:
+        en = getattr(c, "common_name", None) or c.name
+        items.append(Country(c.alpha_2, ru.gettext(en), en))
+    return tuple(sorted(items, key=lambda c: c.name.replace("Ё", "Е").casefold()))
 
 
 class ValidationErrors(DomainError):

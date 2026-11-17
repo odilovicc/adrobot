@@ -47,6 +47,7 @@
   --ab-text-2: #94a3b8;
   --ab-primary: #60a5fa;
   --ab-primary-soft: #172a4d;
+  --ab-icon-filter: invert(1) brightness(1.6);
   --ab-success: #4ade80;
   --ab-success-soft: #12301f;
   --ab-danger: #f87171;
@@ -186,8 +187,7 @@ a, button, [role="button"], .row-link, .btn-check + label { cursor: pointer; }
 .req { color: var(--ab-danger); }
 .form-control, .form-select { background-color: var(--ab-surface); border-color: var(--ab-border-strong); min-height: 2.5rem; }
 .form-actions { display: flex; justify-content: flex-end; gap: .5rem; padding: 1rem 1.25rem; background: var(--ab-surface-2); border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius); }
-.geo-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; min-height: 0; }
-.chip { display: inline-flex; align-items: center; padding: .1rem .5rem; border-radius: .35rem; background: var(--ab-primary-soft); color: var(--ab-primary); font-size: .8125rem; font-weight: 500; }
+.chip { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .5rem; border-radius: .35rem; background: var(--ab-primary-soft); color: var(--ab-primary); font-size: .8125rem; font-weight: 500; }
 .chip-bad { background: var(--ab-danger-soft); color: var(--ab-danger); text-decoration: wavy underline; }
 .preview-card { top: 5rem; }
 .preview-campaign { display: flex; gap: .75rem; align-items: flex-start; padding-bottom: .9rem; margin-bottom: .9rem; border-bottom: 1px dashed var(--ab-border-strong); }
@@ -262,6 +262,9 @@ a, button, [role="button"], .row-link, .btn-check + label { cursor: pointer; }
 .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option.select2-results__option--highlighted { background: var(--ab-primary-soft); color: var(--ab-text); }
 .add-offer .select2-container--bootstrap-5 .select2-selection { min-height: calc(1.5em + .5rem + 2px); }
 .is-invalid + .select2-container--bootstrap-5 .select2-selection { border-color: var(--ab-danger); }
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered .select2-selection__choice { background: var(--ab-primary-soft); border-color: transparent; color: var(--ab-text); }
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered .select2-selection__choice .select2-selection__choice__remove { filter: var(--ab-icon-filter, none); }
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-search .select2-search__field { color: var(--ab-text); }
 
 @media (max-width: 575.98px) {
   .app-header { position: static; }

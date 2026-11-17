@@ -62,11 +62,15 @@
       <fieldset class="form-section">
         <legend>Поток 1 · гео-редирект</legend>
         <label class="form-label" for="geo">Страны <span class="req" aria-hidden="true">*</span></label>
-        <input class="form-control mono {{ 'is-invalid' if errors.get('geo') }}" id="geo" name="geo" value="{{ form.geo or '' }}"
-               placeholder="AU, MX, RO" required autocomplete="off" spellcheck="false"
-               {{ 'aria-invalid=true' if errors.get('geo') }} {{ described('geo', True) }}>
-        <div class="geo-chips" id="geo-chips" aria-hidden="true"></div>
-        <div class="form-text" id="geo-help">Коды ISO 3166-1 alpha-2 через запятую или пробел. Великобритания — <code>GB</code>, не <code>UK</code>.</div>
+        <select class="form-select {{ 'is-invalid' if errors.get('geo') }}" id="geo" name="geo" multiple required data-country-select
+                data-placeholder="Начните вводить страну или код: Австралия, AU"
+                {{ 'aria-invalid=true' if errors.get('geo') }} {{ described('geo', True) }}>
+          {% for code in geo_unknown %}<option value="{{ code }}" selected>{{ code }} — неизвестный код</option>{% endfor %}
+          {% for c in countries %}
+            <option value="{{ c.code }}" data-en="{{ c.name_en }}" {{ 'selected' if c.code in geo_picked }}>{{ c.name }} · {{ c.code }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text" id="geo-help">Выберите одну или несколько стран — код ISO подставится сам. Искать можно по-русски, по-английски или по коду.</div>
         {{ field_error('geo') }}
       </fieldset>
 

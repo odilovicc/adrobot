@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -51,6 +52,10 @@ def _creator_choices(kt: KeitaroClient) -> dict[str, list[dict[str, Any]]]:
 def _render_form(request: Request, kt: KeitaroClient, form: dict[str, Any], errors: dict[str, str],
                  status_code: int = 200) -> Response:  # fmt: skip
     ctx: dict[str, Any] = {"form": form, "errors": errors, "domains": [], "groups": [], "sources": []}
+    picked = list(dict.fromkeys(t.upper() for t in re.split(r"[\s,;]+", form.get("geo") or "") if t))
+    ctx["countries"] = creator.country_choices()
+    ctx["geo_picked"] = picked
+    ctx["geo_unknown"] = [c for c in picked if c not in creator.ISO_ALPHA2]  # kept visible next to the error
     try:
         ctx.update(_creator_choices(kt))
         if form.get("offer_id"):
@@ -81,11 +86,11 @@ def _int(value: str | None) -> int | None:
 @router.post("/campaigns/new", response_class=HTMLResponse)
 def create_campaign(
     request: Request, kt: Kt, db: Db, settings: Conf,
-    name: Annotated[str, Form()] = "", geo: Annotated[str, Form()] = "",
+    name: Annotated[str, Form()] = "", geo: Annotated[list[str] | None, Form()] = None,
     offer_id: Annotated[str | None, Form()] = None, domain_id: Annotated[str | None, Form()] = None,
     group_id: Annotated[str | None, Form()] = None, traffic_source_id: Annotated[str | None, Form()] = None,
 ) -> Response:  # fmt: skip
-    raw = {"name": name, "geo": geo, "offer_id": _int(offer_id), "domain_id": _int(domain_id),
+    raw = {"name": name, "geo": ",".join(geo or []), "offer_id": _int(offer_id), "domain_id": _int(domain_id),
            "group_id": _int(group_id), "traffic_source_id": _int(traffic_source_id)}  # fmt: skip
     try:
         campaign = creator.create_campaign(db, kt, settings, creator.CampaignForm(**raw))

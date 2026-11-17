@@ -71,7 +71,7 @@ def test_stream_failure_rolls_back_campaign(client, kt_state):
     assert "откатана" in resp.text and "Injected failure" in resp.text
     assert new_campaigns(kt_state) == []
     assert all(s["campaign_id"] in kt_state.seed_ids for s in kt_state.streams.values())
-    assert 'value="AU, mx"' in resp.text
+    assert 'value="AU" data-en="Australia" selected' in resp.text and 'value="MX" data-en="Mexico" selected' in resp.text
 
 
 def test_second_stream_failure_also_rolls_back(client, kt_state):
@@ -128,3 +128,27 @@ def test_index_marks_opened_and_dirty_campaigns(client):
 
 def test_navbar_shows_mock_tracker(client):
     assert "Mock Keitaro" in client.get("/").text
+
+
+def test_country_picker_shows_russian_names():
+    from app.services.creator import country_choices
+
+    by_code = {c.code: c for c in country_choices()}
+    assert by_code["AU"].name == "Австралия" and by_code["GB"].name_en == "United Kingdom"
+    assert set(by_code) == ISO_ALPHA2
+
+
+def test_creator_accepts_countries_from_multi_select(client, kt_state):
+    resp = client.post("/campaigns/new", data={**FORM, "geo": ["AU", "MX"]}, follow_redirects=False)
+    assert resp.status_code == 303
+    (campaign,) = new_campaigns(kt_state)
+    geo_stream = next(s for s in kt_state.streams.values() if s["campaign_id"] == campaign["id"] and s["filters"])
+    assert geo_stream["filters"][0]["payload"] == ["AU", "MX"]
+
+
+def test_creator_form_lists_countries_and_keeps_selection(client):
+    page = client.get("/campaigns/new").text
+    assert '<option value="AU" data-en="Australia" >Австралия · AU</option>' in page
+    page = client.post("/campaigns/new", data={**FORM, "name": " ", "geo": ["RO", "XX"]}).text
+    assert 'value="RO" data-en="Romania" selected' in page
+    assert "XX — неизвестный код" in page

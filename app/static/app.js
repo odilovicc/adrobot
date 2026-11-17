@@ -444,6 +444,29 @@
       });
     });
 
+    // Countries: the user picks a name, the ISO code is submitted. Search by RU/EN name or code.
+    const norm = (t) => (t || "").toLowerCase().replace(/ё/g, "е");
+    let geoTerm = "";
+    function countryRank(opt) {
+      const q = norm(geoTerm).trim();
+      if (!q) return 3;
+      if (norm(opt.id) === q) return 0;
+      const ru = norm(opt.text), en = norm(opt.element && opt.element.dataset.en);
+      return ru.startsWith(q) || en.startsWith(q) ? 1 : 2;
+    }
+    const $geo = $form.find("select[data-country-select]");
+    $geo.select2({
+      theme: "bootstrap-5", width: "100%", placeholder: $geo.data("placeholder"), language: SELECT2_RU, closeOnSelect: false,
+      matcher(params, data) {
+        geoTerm = params.term || "";
+        const q = norm(geoTerm).trim();
+        if (!q) return data;
+        const hay = [data.id, data.text, data.element && data.element.dataset.en].map(norm);
+        return hay.some((h) => h.includes(q)) ? data : null;
+      },
+      sorter: (items) => items.slice().sort((a, b) => countryRank(a) - countryRank(b)),
+    });
+
     function selectedText($s, fallback) {
       const t = $s.find("option:selected").text().trim();
       return t ? t.replace(/\s·\s#\d+$/, "") : fallback;
@@ -453,10 +476,12 @@
       $("#pv-name").text($("#name").val().trim() || "Без названия");
       $("#pv-domain").text(selectedText($("#domain_id"), "домен не выбран"));
       $("#pv-group").text(selectedText($("#group_id"), "без группы"));
-      const codes = $("#geo").val().toUpperCase().split(/[\s,;]+/).filter(Boolean);
-      const unique = [...new Set(codes)];
-      const chips = unique.map((c) => $("<span>").addClass("chip mono").toggleClass("chip-bad", !/^[A-Z]{2}$/.test(c)).text(c));
-      $("#geo-chips").empty().append(chips.map(($c) => $c.clone()));
+      const chips = $geo.find("option:selected").get().map((o) => {
+        const known = !!o.dataset.en;
+        return $("<span>").addClass("chip").toggleClass("chip-bad", !known)
+          .attr("title", known ? o.text.replace(/\s·\s\w+$/, "") : "Неизвестный код")
+          .append($("<span class=\"mono\">").text(o.value), known ? " " + o.text.replace(/\s·\s\w+$/, "") : "");
+      });
       $("#pv-geo").empty().append(chips.length ? chips : $('<span class="text-secondary">—</span>'));
       const offer = $("#offer_id").find("option:selected").text().trim();
       $("#pv-offer").text(offer || "оффер не выбран");
