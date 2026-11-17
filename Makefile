@@ -1,4 +1,4 @@
-.PHONY: install migrate dev app mock test probe probe-write
+.PHONY: install migrate dev app mock test probe probe-write e2e-real
 
 install:
 	uv sync
@@ -27,3 +27,7 @@ probe:
 
 probe-write:
 	uv run python scripts/probe_keitaro.py --write
+
+# Video scenario on the real tracker: temporary adrobot-probe-e2e-* campaign, deleted at the end.
+e2e-real:
+	uv run python scripts/e2e_real.py

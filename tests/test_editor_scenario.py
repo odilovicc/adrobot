@@ -304,3 +304,13 @@ def test_cancel_drops_pin_of_discarded_value(editor, db):
     pins = {link.offer_id: link.pinned for link in stream(db).offers}
     assert pins == {3747: False, 3748: False, 3749: False}
     assert shares(db) == {3747: 33, 3748: 33, 3749: 34}
+
+
+def test_order_survives_push_although_keitaro_reorders(editor, db, kt_state):
+    sid = stream(db).id
+    ok(editor.post(f"/api/streams/{sid}/offers", json={"offer_id": OFFER4}))
+    ok(editor.post(f"/api/streams/{sid}/push"))
+    assert [o["offer_id"] for o in kt_state.streams[FLOW2]["offers"]] == [OFFER4, 3749, 3748, 3747]
+    assert [link.offer_id for link in stream(db).offers] == [3747, 3748, 3749, OFFER4]
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    assert [link.offer_id for link in stream(db).offers] == [3747, 3748, 3749, OFFER4]

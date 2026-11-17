@@ -90,6 +90,23 @@ def main() -> int:
         show("PUT {offers} → other fields changed", changed or "none")
         show("PUT {offers} → offers now", [(o["offer_id"], o["share"], o.get("state")) for o in after["offers"]])
 
+        # Does Keitaro validate the sum, and how does it treat disabled offers?
+        for label, offers_body in (
+            ("active 50 + disabled 50", [{"offer_id": o1, "share": 50, "state": "active"},
+                                         {"offer_id": o2, "share": 50, "state": "disabled"}]),
+            ("active 100 + disabled 40", [{"offer_id": o1, "share": 100, "state": "active"},
+                                          {"offer_id": o2, "share": 40, "state": "disabled"}]),
+            ("active 60 + active 30 (sum 90)", [{"offer_id": o1, "share": 60, "state": "active"},
+                                                {"offer_id": o2, "share": 30, "state": "active"}]),
+            ("empty list", []),
+        ):  # fmt: skip
+            try:
+                kt.update_stream(st["id"], {"offers": offers_body})
+                now = kt.get_stream(st["id"])["offers"]
+                show(f"PUT {label} → accepted", [(o["offer_id"], o["share"], o.get("state")) for o in now])
+            except KeitaroError as exc:
+                show(f"PUT {label} → rejected", {"status": exc.status_code, "error": exc.message})
+
         geo_after = kt.get_stream(geo["id"])
         show("geo stream filters after", geo_after.get("filters"))
         show("campaign streams list", [(s["id"], s["name"], s.get("state")) for s in kt.campaign_streams(camp["id"])])

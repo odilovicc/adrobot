@@ -101,8 +101,14 @@ def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], name
 
 
 def _merge_order(in_kt: list[StreamOffer], archived: list[StreamOffer], old: list[StreamOffer]) -> list[StreamOffer]:
-    """Keitaro order for live offers; archived ones stay right after their old predecessor."""
-    result = list(in_kt)
+    """Our order for offers we already know, then offers new to us in Keitaro order;
+    archived ones stay right after their old predecessor.
+
+    Verified on a real tracker: Keitaro doesn't keep the order of ``offers`` sent in PUT,
+    so its order can't be the source of truth for display or for the +1 remainder.
+    """
+    known = {id(link): i for i, link in enumerate(old)}
+    result = sorted(in_kt, key=lambda link: known.get(id(link), len(old)))  # stable: new ones keep KT order
     archived_ids = {id(link) for link in archived}
     for idx, link in enumerate(old):
         if id(link) not in archived_ids:

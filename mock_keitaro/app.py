@@ -105,7 +105,8 @@ class MockState:
             if key == "filters":
                 stream["filters"] = self._filters(sid, value or [])
             elif key == "offers":
-                stream["offers"] = self._offers(sid, value or [])
+                # Real Keitaro doesn't keep the order sent in PUT (probe 2026-11-17: sent [a, b], got [b, a]).
+                stream["offers"] = list(reversed(self._offers(sid, value or [])))
             elif key in STREAM_FIELDS:
                 stream[key] = value
         stream["updated_at"] = _now()
