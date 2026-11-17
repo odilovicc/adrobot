@@ -222,3 +222,85 @@ def test_autocomplete_hides_offers_already_in_stream(editor, db):
     ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/remove"))
     ids = [r["id"] for r in editor.get("/api/offers", params={"stream_id": sid}).json()["results"]]
     assert 3747 in ids
+
+
+# --- review fixes -------------------------------------------------------------
+
+
+def test_push_of_stream_without_offers_is_blocked(editor, db, kt_state):
+    sid = stream(db).id
+    for offer_id in (3747, 3748, 3749):
+        ok(editor.post(f"/api/stream-offers/{link_id(db, offer_id)}/remove"))
+    html = editor.get(f"/campaigns/{CAMPAIGN}/streams").text
+    assert "не осталось активных офферов" in html
+    resp = editor.post(f"/api/streams/{sid}/push")
+    assert resp.status_code == 400 and "не осталось активных офферов" in resp.json()["error"]
+    assert kt_shares(kt_state) == {3747: 33, 3748: 33, 3749: 34}
+
+
+def test_fetch_after_offers_deleted_in_kt_proposes_100_percent_draft(editor, db, kt_state):
+    _kt_delete(kt_state, 3748)  # Keitaro now has 33 + 34 = 67%
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    assert shares(db) == {3747: 50, 3748: 0, 3749: 50}
+    assert stream(db).is_dirty  # Push is offered right away
+    ok(editor.post(f"/api/streams/{stream(db).id}/push"))
+    assert kt_shares(kt_state) == {3747: 50, 3749: 50}
+
+
+def test_pin_is_dropped_when_keitaro_has_a_different_value(editor, db):
+    sid = stream(db).id
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/share", json={"share": 25}))
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))  # draft 25 discarded, Keitaro has 33
+    link = next(link for link in stream(db).offers if link.offer_id == 3747)
+    assert link.share == 33 and not link.pinned
+    ok(editor.post(f"/api/streams/{sid}/offers", json={"offer_id": OFFER4}))
+    assert shares(db) == {3747: 25, 3748: 25, 3749: 25, OFFER4: 25}
+
+
+def test_pin_survives_fetch_when_keitaro_agrees(editor, db):
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3749)}/pin", json={"pinned": True}))
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    assert next(link for link in stream(db).offers if link.offer_id == 3749).pinned
+
+
+def test_pin_and_unpin_alone_do_not_make_stream_dirty(editor, db):
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/pin", json={"pinned": True}))
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/pin", json={"pinned": False}))
+    assert shares(db) == {3747: 33, 3748: 33, 3749: 34}
+    assert not stream(db).is_dirty
+
+
+def test_offer_disabled_in_kt_is_outside_100_percent(editor, db, kt_state):
+    kt_state.streams[FLOW2]["offers"][2]["state"] = "disabled"  # 3749, 34%
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    s = stream(db)
+    assert s.total_share == 100 and shares(db) == {3747: 50, 3748: 50, 3749: 34}
+    resp = editor.post(f"/api/stream-offers/{link_id(db, 3749)}/share", json={"share": 10})
+    assert resp.status_code == 400 and "выключен в Keitaro" in resp.json()["error"]
+    ok(editor.post(f"/api/streams/{s.id}/offers", json={"offer_id": OFFER4}))
+    assert shares(db) == {3747: 34, 3748: 33, 3749: 34, OFFER4: 33}
+
+
+def test_bring_back_returns_offer_to_its_place(editor, db):
+    sid = stream(db).id
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3748)}/remove"))
+    ok(editor.post(f"/api/streams/{sid}/push"))
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3748)}/restore"))
+    assert [link.offer_id for link in stream(db).offers] == [3747, 3748, 3749]
+    ok(editor.post(f"/api/streams/{sid}/push"))
+    ok(editor.post(f"/api/campaigns/{CAMPAIGN}/fetch"))
+    assert [link.offer_id for link in stream(db).offers][:3] == [3747, 3748, 3749]
+
+
+def test_redirect_stream_shows_filter_values(editor, db):
+    assert "AU" in stream(db, FLOW1).summary
+
+
+def test_cancel_drops_pin_of_discarded_value(editor, db):
+    sid = stream(db).id
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3747)}/share", json={"share": 40}))
+    ok(editor.post(f"/api/stream-offers/{link_id(db, 3749)}/pin", json={"pinned": True}))
+    ok(editor.post(f"/api/streams/{sid}/cancel"))
+    pins = {link.offer_id: link.pinned for link in stream(db).offers}
+    assert pins == {3747: False, 3748: False, 3749: False}
+    assert shares(db) == {3747: 33, 3748: 33, 3749: 34}

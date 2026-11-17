@@ -1,0 +1,18 @@
+# Secrets and local state must never end up in the image.
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+
+# Host-specific environment and caches (macOS .venv won't run in Linux anyway).
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+.DS_Store
+
+.git/
+.github/
+docs/screenshots/

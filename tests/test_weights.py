@@ -78,3 +78,26 @@ def test_properties(slots):
         values = [result[s.key] for s in floating]
         assert max(values) - min(values) <= 1
         assert values == sorted(values, reverse=True)
+
+
+def test_existing_even_split_is_kept():
+    # 33/33/34 from Keitaro stays as is instead of becoming 34/33/33
+    assert shares(Slot("a", current=33), Slot("b", current=33), Slot("c", current=34)) == [33, 33, 34]
+
+
+def test_uneven_or_incomplete_current_is_recomputed():
+    assert shares(Slot("a", current=50), Slot("b", current=50), Slot("c", current=0)) == [34, 33, 33]
+    assert shares(Slot("a", current=50), Slot("b", current=50), Slot("c")) == [34, 33, 33]
+    assert shares(Slot("a", current=34), Slot("b", current=33), Slot("c", current=32)) == [34, 33, 33]
+
+
+def test_stability_respects_pinned_rest():
+    assert shares(Slot("p", pinned_share=25), Slot("a", current=37), Slot("b", current=38)) == [25, 37, 38]
+    assert shares(Slot("p", pinned_share=30), Slot("a", current=37), Slot("b", current=38)) == [30, 35, 35]
+
+
+@given(st.lists(st.integers(0, 100), min_size=1, max_size=8))
+def test_stable_result_is_always_valid(currents):
+    slots = [Slot(i, current=c) for i, c in enumerate(currents)]
+    result = distribute(slots).values()
+    assert sum(result) == 100 and max(result) - min(result) <= 1

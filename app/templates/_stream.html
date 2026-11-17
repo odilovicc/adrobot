@@ -1,5 +1,6 @@
 {% set dirty = stream.is_dirty %}
 {% set total = stream.total_share %}
+{% set publish_error = stream.publish_error %}
 <section class="card mb-3 stream {{ 'stream-dirty' if dirty }}" id="stream-{{ stream.id }}" data-id="{{ stream.id }}" data-dirty="{{ 'true' if dirty else 'false' }}">
   <div class="card-header d-flex flex-wrap align-items-center gap-2">
     <div class="me-auto">
@@ -9,13 +10,16 @@
       {% if dirty %}<span class="badge text-bg-warning ms-1">не опубликовано</span>{% endif %}
     </div>
     {% if stream.offers %}
-      <span class="badge {{ 'text-bg-danger' if stream.active_offers and total != 100 else 'text-bg-light border' }}" title="Сумма весов активных офферов">Σ {{ total }}%</span>
+      <span class="badge {{ 'text-bg-danger' if publish_error else 'text-bg-light border' }}" title="Сумма весов офферов, получающих трафик">Σ {{ total }}%</span>
     {% endif %}
     {% if dirty %}
-      <button class="btn btn-sm btn-success" data-action="push" {{ 'disabled' if stream.active_offers and total != 100 }}><i class="bi bi-cloud-upload"></i> Push to KT</button>
+      <button class="btn btn-sm btn-success" data-action="push" {{ 'disabled' if publish_error }} {% if publish_error %}title="{{ publish_error }}"{% endif %}><i class="bi bi-cloud-upload"></i> Push to KT</button>
       <button class="btn btn-sm btn-outline-secondary" data-action="cancel"><i class="bi bi-x-lg"></i> Cancel</button>
     {% endif %}
   </div>
+  {% if dirty and publish_error %}
+    <div class="alert alert-danger rounded-0 border-0 border-bottom py-2 px-3 mb-0 small"><i class="bi bi-exclamation-triangle"></i> {{ publish_error }}</div>
+  {% endif %}
   {% if stream.offers %}
   <div class="table-responsive">
   <table class="table table-sm align-middle mb-0">
@@ -28,11 +32,13 @@
           <span class="text-secondary">#{{ link.offer_id }}</span> {{ link.offer.name }}
           {% if removed %}<span class="badge text-bg-secondary ms-1">removed</span>{% endif %}
           {% if link.is_new %}<span class="badge text-bg-info ms-1">new</span>{% endif %}
-          {% if link.kt_state == 'disabled' %}<span class="badge text-bg-light border ms-1" title="Выключен в Keitaro">disabled in KT</span>{% endif %}
+          {% if link.kt_disabled and not removed %}<span class="badge text-bg-light border ms-1" title="Выключен в Keitaro: не получает трафик и не входит в 100%">disabled in KT</span>{% endif %}
         </td>
         <td class="share-col text-nowrap">
           {% if removed %}
             <span>0%</span>
+          {% elif link.kt_disabled %}
+            <span class="text-secondary" title="Выключен в Keitaro: вес сохраняется, но не входит в 100%">{{ link.share }}%</span>
           {% else %}
             <button class="btn btn-link btn-sm p-0 share-value" data-action="edit-share" data-share="{{ link.share }}" title="Задать вес вручную (закрепит его)">{{ link.share }}%</button>
             <button class="btn btn-sm btn-link p-0 ms-1 pin {{ 'pin-on' if link.pinned }}" data-action="pin" data-pinned="{{ 'true' if link.pinned else 'false' }}"

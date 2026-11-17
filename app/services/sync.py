@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.keitaro import KeitaroClient
 from app.models import Campaign, Offer, OfferState, Stream, StreamOffer
+from app.services.weights import Slot, WeightsError, distribute
 
 
 def import_campaign(db: Session, kt: KeitaroClient, keitaro_id: int) -> Campaign:
@@ -53,8 +54,9 @@ def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], name
     stream.summary = stream_summary(kt_stream)
 
     kt_offers = kt_stream.get("offers") or []
+    old_order = sorted(stream.offers, key=lambda link: link.position)
     links = {link.offer_id: link for link in stream.offers}
-    position = 0
+    in_kt: list[StreamOffer] = []
     for kt_offer in kt_offers:
         oid = int(kt_offer["offer_id"])
         upsert_offer(db, oid, names.get(oid))
@@ -62,33 +64,95 @@ def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], name
         if link is None:
             link = StreamOffer(offer_id=oid, pinned=False)
             stream.offers.append(link)
-        link.position = position
-        position += 1
+        kt_share = int(kt_offer.get("share") or 0)
+        # A pin is our draft concept: keep it only if Keitaro still has the pinned value,
+        # otherwise the pinned number would silently change under the user.
+        if link.pinned and link.share != kt_share:
+            link.pinned = False
         link.state = link.published_state = OfferState.ACTIVE
-        link.share = link.published_share = int(kt_offer.get("share") or 0)
+        link.share = link.published_share = kt_share
         link.kt_state = kt_offer.get("state") or "active"
+        if link.kt_disabled:
+            link.pinned = False
         link.is_new = False
+        in_kt.append(link)
 
     # Known to us but gone from Keitaro: drafts are dropped, published ones go to the archive.
-    for link in sorted(links.values(), key=lambda link: link.position):
+    archived: list[StreamOffer] = []
+    for link in links.values():
         if link.is_new:
             stream.offers.remove(link)
             continue
-        link.position = position
-        position += 1
         link.state = link.published_state = OfferState.REMOVED
         link.share = link.published_share = 0
         link.pinned = False
+        archived.append(link)
+
+    for i, link in enumerate(_merge_order(in_kt, archived, old_order)):
+        link.position = i
     stream.offers.sort(key=lambda link: link.position)
+
+    # E.g. offers deleted right in Keitaro left 66%: offer the fixed split as a draft to Push.
+    if stream.weighted_offers and stream.total_share != 100:
+        try:
+            rebalance(stream)
+        except WeightsError:
+            pass  # pinned sum > 100 can't happen after the pin check above; keep Keitaro's numbers
+
+
+def _merge_order(in_kt: list[StreamOffer], archived: list[StreamOffer], old: list[StreamOffer]) -> list[StreamOffer]:
+    """Keitaro order for live offers; archived ones stay right after their old predecessor."""
+    result = list(in_kt)
+    archived_ids = {id(link) for link in archived}
+    for idx, link in enumerate(old):
+        if id(link) not in archived_ids:
+            continue
+        pos = 0
+        for prev in reversed(old[:idx]):
+            if prev in result:
+                pos = result.index(prev) + 1
+                break
+        result.insert(pos, link)
+    return result
+
+
+def rebalance(stream: Stream) -> None:
+    """Recompute draft shares. Raises WeightsError without touching shares on bad config.
+
+    Offers disabled in Keitaro don't take traffic: they keep their share and stay out of the 100%.
+    """
+    links = [link for link in sorted(stream.offers, key=lambda link: link.position) if not link.kt_disabled]
+    slots = [
+        Slot(link.id or id(link), active=link.state == OfferState.ACTIVE,
+             pinned_share=link.share if link.pinned else None,
+             current=link.share)  # fmt: skip
+        for link in links
+    ]
+    shares = distribute(slots)
+    for link, slot in zip(links, slots, strict=True):
+        link.share = shares[slot.key]
 
 
 def stream_summary(kt_stream: dict[str, Any]) -> str:
-    """One-line description for streams we don't edit (filters are not parsed)."""
-    filters = ", ".join(f.get("name", "?") for f in kt_stream.get("filters") or []) or "None"
+    """One-line description for streams we don't edit, e.g. ``filter by country = AU, MX``."""
+    filters = "; ".join(_filter_text(f) for f in kt_stream.get("filters") or []) or "None"
     action = kt_stream.get("action_type") or "—"
     payload = kt_stream.get("action_payload")
     target = f" → {payload}" if isinstance(payload, str) and payload else ""
     return f"filter by {filters}; schema {kt_stream.get('schema') or '—'}, action {action}{target}"
+
+
+def _filter_text(f: dict[str, Any]) -> str:
+    name = f.get("name") or "?"
+    payload = f.get("payload")
+    if isinstance(payload, list):
+        values = ", ".join(str(v) for v in payload)
+    elif payload in (None, "", {}):
+        values = ""
+    else:
+        values = str(payload)
+    op = " ≠ " if f.get("mode") == "reject" else " = "
+    return f"{name}{op}{values}" if values else name
 
 
 def _offer_names(kt: KeitaroClient, kt_streams: list[dict[str, Any]]) -> dict[int, str]:

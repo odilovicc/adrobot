@@ -64,8 +64,24 @@ class Stream(Base):
         return [o for o in self.offers if o.state == OfferState.ACTIVE]
 
     @property
+    def weighted_offers(self) -> list["StreamOffer"]:
+        """Offers that actually take traffic: active here and not disabled in Keitaro."""
+        return [o for o in self.offers if o.is_weighted]
+
+    @property
     def total_share(self) -> int:
-        return sum(o.share for o in self.active_offers)
+        return sum(o.share for o in self.weighted_offers)
+
+    @property
+    def publish_error(self) -> str | None:
+        """Why the current draft can't be pushed, or None."""
+        if not self.offers:
+            return None
+        if not self.weighted_offers:
+            return "В потоке не осталось активных офферов — Keitaro получит пустой поток. Верните хотя бы один оффер"
+        if self.total_share != 100:
+            return f"Сумма весов {self.total_share}% — опубликовать можно только ровно 100%"
+        return None
 
     @property
     def is_dirty(self) -> bool:
@@ -95,6 +111,14 @@ class StreamOffer(Base):
 
     stream: Mapped[Stream] = relationship(back_populates="offers")
     offer: Mapped[Offer] = relationship(lazy="joined")
+
+    @property
+    def kt_disabled(self) -> bool:
+        return self.kt_state == "disabled"
+
+    @property
+    def is_weighted(self) -> bool:
+        return self.state == OfferState.ACTIVE and not self.kt_disabled
 
     @property
     def is_dirty(self) -> bool:

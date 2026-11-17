@@ -117,6 +117,7 @@
         const $input = $('<input type="number" min="0" max="100" step="1" class="form-control form-control-sm share-input" aria-label="Вес, %">')
           .val($btn.data("share"));
         $btn.replaceWith($input);
+        bindShareInput($input);
         $input.trigger("focus").trigger("select");
         return;
       }
@@ -129,21 +130,33 @@
     }).fail(() => $card.find("button").prop("disabled", false));
   });
 
-  function commitShare($input) {
-    if ($input.data("done")) return;
-    $input.data("done", true);
+  // The input lives until the card is re-rendered. replaceWith() wipes jQuery data and then
+  // fires blur on the detached input, so the "already handled" flag is a closure variable.
+  function bindShareInput($input) {
+    let done = false;
     const $card = $input.closest(".stream");
     const linkId = $input.closest("tr").data("link");
-    const raw = String($input.val()).trim();
-    const value = Number(raw);
-    if (raw === "" || !Number.isInteger(value) || value < 0 || value > 100) {
-      toast("Вес должен быть целым числом от 0 до 100");
-      reloadCard($card);
-      return;
+
+    function commit() {
+      if (done) return;
+      done = true;
+      const raw = String($input.val()).trim();
+      const value = Number(raw);
+      if (raw === "" || !Number.isInteger(value) || value < 0 || value > 100) {
+        toast("Вес должен быть целым числом от 0 до 100");
+        reloadCard($card);
+        return;
+      }
+      post(`/api/stream-offers/${linkId}/share`, { share: value })
+        .done((html) => swapCard($card, html))
+        .fail(() => reloadCard($card));
     }
-    post(`/api/stream-offers/${linkId}/share`, { share: value })
-      .done((html) => swapCard($card, html))
-      .fail(() => reloadCard($card));
+
+    $input.on("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { done = true; reloadCard($card); }
+    });
+    $input.on("blur", commit);
   }
 
   function reloadCard($card) {
@@ -154,11 +167,12 @@
     });
   }
 
-  $(document).on("keydown", ".share-input", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); commitShare($(this)); }
-    if (e.key === "Escape") { $(this).data("done", true); reloadCard($(this).closest(".stream")); }
-  });
-  $(document).on("blur", ".share-input", function () { commitShare($(this)); });
+  function localizeTimes($root) {
+    $root.find("time[data-local]").each(function () {
+      const d = new Date(this.getAttribute("datetime"));
+      if (!isNaN(d)) this.textContent = d.toLocaleString();
+    });
+  }
 
   // --- Fetch ---------------------------------------------------------------
   function doFetch() {
@@ -169,6 +183,7 @@
         destroyOfferSearch($("#streams"));
         $("#streams").html(html);
         initOfferSearch($("#streams"));
+        localizeTimes($("#streams"));
         applyRemovedFilter();
         toast("Потоки загружены из Keitaro", "success");
       })
@@ -200,5 +215,8 @@
     busy($(this).find("button[type=submit]"), true);
   });
 
-  $(function () { initOfferSearch($(document)); });
+  $(function () {
+    initOfferSearch($(document));
+    localizeTimes($(document));
+  });
 })(jQuery);

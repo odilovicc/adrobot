@@ -6,7 +6,11 @@ from app.errors import ConflictError, DomainError, NotFoundError
 from app.keitaro import KeitaroClient
 from app.models import OfferState, Stream, StreamOffer
 from app.services.sync import apply_kt_stream, upsert_offer
-from app.services.weights import Slot, WeightsError, distribute
+from app.services.sync import rebalance as _rebalance
+from app.services.weights import WeightsError
+
+
+KT_DISABLED = "Оффер выключен в Keitaro и не получает трафик — включите его в трекере и сделайте Fetch"
 
 
 def get_stream(db: Session, stream_id: int) -> Stream:
@@ -24,19 +28,10 @@ def get_link(db: Session, link_id: int) -> StreamOffer:
 
 
 def rebalance(stream: Stream) -> None:
-    """Recompute draft shares. Raises DomainError without touching shares on bad config."""
-    links = sorted(stream.offers, key=lambda link: link.position)
-    slots = [
-        Slot(link.id or id(link), active=link.state == OfferState.ACTIVE,
-             pinned_share=link.share if link.pinned else None)  # fmt: skip
-        for link in links
-    ]
     try:
-        shares = distribute(slots)
+        _rebalance(stream)
     except WeightsError as exc:
         raise DomainError(str(exc)) from exc
-    for link, slot in zip(links, slots, strict=True):
-        link.share = shares[slot.key]
 
 
 def _commit(db: Session, stream: Stream) -> Stream:
@@ -101,6 +96,8 @@ def set_pinned(db: Session, link_id: int, pinned: bool) -> Stream:
     link = get_link(db, link_id)
     if link.state != OfferState.ACTIVE:
         raise DomainError("Нельзя закрепить вес удалённого оффера")
+    if link.kt_disabled:
+        raise DomainError(KT_DISABLED)
     link.pinned = pinned
     return _commit(db, link.stream)
 
@@ -109,6 +106,8 @@ def set_share(db: Session, link_id: int, share: int) -> Stream:
     link = get_link(db, link_id)
     if link.state != OfferState.ACTIVE:
         raise DomainError("Нельзя задать вес удалённому офферу")
+    if link.kt_disabled:
+        raise DomainError(KT_DISABLED)
     if not 0 <= share <= 100:
         raise DomainError("Вес должен быть целым числом от 0 до 100")
     link.share = share
@@ -122,6 +121,8 @@ def cancel(db: Session, stream_id: int) -> Stream:
         if link.is_new:
             stream.offers.remove(link)
         else:
+            if link.pinned and link.share != link.published_share:
+                link.pinned = False  # the pin belonged to the discarded draft value
             link.state = link.published_state
             link.share = link.published_share
             if link.state != OfferState.ACTIVE:
@@ -133,9 +134,9 @@ def cancel(db: Session, stream_id: int) -> Stream:
 
 def push(db: Session, kt: KeitaroClient, stream_id: int) -> Stream:
     stream = get_stream(db, stream_id)
+    if error := stream.publish_error:
+        raise DomainError(error)
     active = sorted(stream.active_offers, key=lambda link: link.position)
-    if active and sum(link.share for link in active) != 100:
-        raise DomainError(f"Сумма весов {stream.total_share}% — опубликовать можно только ровно 100%")
 
     # Don't overwrite changes made in Keitaro after our last Fetch.
     current = kt.get_stream(stream.keitaro_id)
@@ -146,7 +147,8 @@ def push(db: Session, kt: KeitaroClient, stream_id: int) -> Stream:
         if link.published_state == OfferState.ACTIVE and not link.is_new
     }
     if in_kt != published:
-        raise ConflictError("Поток изменён в Keitaro после последнего Fetch — нажмите Fetch и повторите")
+        raise ConflictError("Поток изменён в Keitaro после последнего Fetch. Ничего не отправлено. "
+            "Нажмите Fetch, чтобы загрузить свежее состояние (ваш черновик в этом потоке будет сброшен), и повторите правки")
 
     payload = {"offers": [{"offer_id": link.offer_id, "share": link.share, "state": link.kt_state}
                           for link in active]}  # fmt: skip

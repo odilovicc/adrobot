@@ -3,4 +3,4 @@
 {% else %}
   <p class="text-secondary">В кампании нет потоков.</p>
 {% endfor %}
-{% if campaign.fetched_at %}<p class="text-secondary small mt-2">Fetched {{ campaign.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>{% endif %}
+{% if campaign.fetched_at %}<p class="text-secondary small mt-2">Fetched <time data-local datetime="{{ campaign.fetched_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ campaign.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</time></p>{% endif %}
