@@ -10,7 +10,7 @@ FORM = {"name": "Test AU MX", "geo": "AU, mx", "offer_id": "3749", "domain_id": 
 
 
 def new_campaigns(kt_state):
-    return [c for c in kt_state.campaigns.values() if c["id"] != 2]
+    return [c for c in kt_state.campaigns.values() if c["id"] not in kt_state.seed_ids]
 
 
 def test_parse_geo():
@@ -70,7 +70,7 @@ def test_stream_failure_rolls_back_campaign(client, kt_state):
     assert resp.status_code == 502
     assert "откатана" in resp.text and "Injected failure" in resp.text
     assert new_campaigns(kt_state) == []
-    assert all(s["campaign_id"] == 2 for s in kt_state.streams.values())
+    assert all(s["campaign_id"] in kt_state.seed_ids for s in kt_state.streams.values())
     assert 'value="AU, mx"' in resp.text
 
 
@@ -108,4 +108,23 @@ def test_form_defaults_from_settings(client):
 
 def test_index_lists_campaigns(client):
     page = client.get("/").text
-    assert "Demo campaign" in page and "/campaigns/2/streams" in page
+    assert "1–25</strong> из 37" in page and 'aria-label="Страницы"' in page
+    page = client.get("/", params={"q": "demo campaign"}).text
+    assert "Demo campaign" in page and "/campaigns/2/streams" in page and "1–1</strong> из 1" in page
+
+
+def test_index_filters_and_ajax_fragment(client):
+    page = client.get("/", params={"state": "disabled", "group": "Gambling"}).text
+    assert "Keto" not in page or "disabled" in page
+    frag = client.get("/", params={"q": "zzz"}, headers={"X-Requested-With": "XMLHttpRequest"}).text
+    assert "<html" not in frag and "Ничего не найдено" in frag and 'id="facets"' in frag
+
+
+def test_index_marks_opened_and_dirty_campaigns(client):
+    client.get("/campaigns/2/streams")
+    page = client.get("/", params={"mine": "1"}).text
+    assert "Demo campaign" in page and "открыта" in page
+
+
+def test_navbar_shows_mock_tracker(client):
+    assert "Mock Keitaro" in client.get("/").text

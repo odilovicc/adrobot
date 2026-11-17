@@ -1,0 +1,123 @@
+{# Facet data for the filter bar, picked up by app.js after an AJAX refresh. #}
+<template id="facets" data-reset="{{ 'show' if q.is_filtered else 'hide' }}" data-url="{{ q.url() }}">
+  {% for value, count in page.state_counts.items() %}<span data-count="state:{{ value }}">{{ count }}</span>{% endfor %}
+  <select>
+    <option value="">Все группы</option>
+    {% for name, count in page.groups %}
+      <option value="{{ name }}" {{ 'selected' if q.group == name }}>{{ 'Без группы' if name == '-' else name }} ({{ count }})</option>
+    {% endfor %}
+  </select>
+</template>
+
+{% if error %}
+  <div class="alert alert-danger d-flex gap-2 align-items-start" role="alert">
+    <i class="bi bi-exclamation-octagon mt-1" aria-hidden="true"></i>
+    <div><strong>Keitaro не ответил.</strong> {{ error }}<br><a href="{{ q.url(refresh=1) }}" class="alert-link">Повторить</a></div>
+  </div>
+{% elif page.total == 0 %}
+  <div class="empty card">
+    <i class="bi bi-inbox" aria-hidden="true"></i>
+    <h2 class="h6 mb-1">В Keitaro пока нет кампаний</h2>
+    <p class="text-secondary mb-3">Создайте первую — с гео-редиректом и оффером.</p>
+    <a class="btn btn-primary btn-sm" href="/campaigns/new"><i class="bi bi-plus-lg" aria-hidden="true"></i> Новая кампания</a>
+  </div>
+{% elif page.found == 0 %}
+  <div class="empty card">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <h2 class="h6 mb-1">Ничего не найдено{% if q.q %} по «{{ q.q }}»{% endif %}</h2>
+    <p class="text-secondary mb-3">Проверьте написание или ослабьте фильтры. Поиск по ID — с решёткой: <code>#212860</code>.</p>
+    <a class="btn btn-outline-secondary btn-sm" href="/" data-nav><i class="bi bi-x-lg" aria-hidden="true"></i> Сбросить фильтры</a>
+  </div>
+{% else %}
+<div class="card table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 data-table">
+      <caption class="visually-hidden">Кампании Keitaro, {{ page.first }}–{{ page.last }} из {{ page.found }}</caption>
+      <thead>
+        <tr>
+          {% macro th(column, label, cls="") %}
+            <th scope="col" class="{{ cls }}" aria-sort="{{ q.aria_sort(column) }}">
+              <a class="sort-link {{ 'is-sorted' if q.sort == column }}" href="{{ q.sort_url(column) }}" data-nav>
+                {{ label }}
+                <i class="bi {{ ('bi-arrow-down' if q.desc else 'bi-arrow-up') if q.sort == column else 'bi-arrow-down-up' }}" aria-hidden="true"></i>
+              </a>
+            </th>
+          {% endmacro %}
+          {{ th("id", "ID", "col-id") }}
+          {{ th("name", "Кампания") }}
+          {{ th("group", "Группа", "d-none d-md-table-cell") }}
+          <th scope="col" class="d-none d-xl-table-cell">Домен</th>
+          {{ th("state", "Статус") }}
+          {{ th("created", "Создана", "d-none d-lg-table-cell") }}
+          <th scope="col" class="d-none d-sm-table-cell">Adrobot</th>
+          <th scope="col" class="text-end"><span class="visually-hidden">Действия</span></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in page.rows %}
+        <tr class="row-link" data-href="/campaigns/{{ r.id }}/streams">
+          <td class="col-id mono">{{ r.id }}</td>
+          <td class="col-name">
+            <a href="/campaigns/{{ r.id }}/streams" class="campaign-name">{{ r.name }}</a>
+            <div class="mono text-secondary small text-truncate">{{ r.alias }}</div>
+          </td>
+          <td class="d-none d-md-table-cell">{% if r.group %}{{ r.group }}{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+          <td class="d-none d-xl-table-cell text-secondary small">{{ r.domain or '—' }}</td>
+          <td>
+            <span class="status status-{{ r.state }}"><span class="dot" aria-hidden="true"></span>{{ r.state }}</span>
+          </td>
+          <td class="d-none d-lg-table-cell mono small text-secondary">
+            {% if r.created %}<time datetime="{{ r.created | replace(' ', 'T') }}Z" data-local="date">{{ r.created[:10] }}</time>{% else %}—{% endif %}
+          </td>
+          <td class="d-none d-sm-table-cell">
+            {% if r.dirty_streams %}
+              <span class="badge badge-dirty" title="Есть неопубликованные изменения"><i class="bi bi-pencil" aria-hidden="true"></i> {{ r.dirty_streams }} не опубл.</span>
+            {% elif r.opened %}
+              <span class="badge badge-soft"><i class="bi bi-check2" aria-hidden="true"></i> открыта</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary text-nowrap" href="/campaigns/{{ r.id }}/streams" aria-label="Открыть кампанию {{ r.name }}">
+              <span class="d-none d-sm-inline">Открыть</span> <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-footer">
+    <div class="text-secondary small">
+      <strong class="text-body">{{ page.first }}–{{ page.last }}</strong> из {{ page.found }}{% if page.found != page.total %} <span>(всего {{ page.total }})</span>{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 ms-auto">
+      <label class="small text-secondary text-nowrap" for="f-per">На странице</label>
+      <select class="form-select form-select-sm per-select" id="f-per">
+        {% for n in per_page %}<option value="{{ q.url(per=n) }}" {{ 'selected' if q.per == n }}>{{ n }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if page.pages > 1 %}
+    <nav aria-label="Страницы">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {{ 'disabled' if q.page == 1 }}">
+          <a class="page-link" href="{{ q.url(page=q.page - 1) }}" data-nav aria-label="Предыдущая"><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        </li>
+        {% for n in page.page_numbers() %}
+          {% if n is none %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% else %}
+            <li class="page-item {{ 'active' if n == q.page }}" {% if n == q.page %}aria-current="page"{% endif %}>
+              <a class="page-link" href="{{ q.url(page=n) }}" data-nav>{{ n }}</a>
+            </li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {{ 'disabled' if q.page == page.pages }}">
+          <a class="page-link" href="{{ q.url(page=q.page + 1) }}" data-nav aria-label="Следующая"><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+        </li>
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

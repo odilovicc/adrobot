@@ -52,6 +52,11 @@ def apply_kt_stream(db: Session, stream: Stream, kt_stream: dict[str, Any], name
     stream.schema = kt_stream.get("schema") or ""
     stream.state = kt_stream.get("state") or "active"
     stream.summary = stream_summary(kt_stream)
+    stream.action_type = kt_stream.get("action_type") or ""
+    payload = kt_stream.get("action_payload")
+    stream.action_payload = payload if isinstance(payload, str) else ""
+    stream.filters = [{"name": f.get("name") or "?", "mode": f.get("mode") or "accept", "payload": f.get("payload")}
+                      for f in kt_stream.get("filters") or []]  # fmt: skip
 
     kt_offers = kt_stream.get("offers") or []
     old_order = sorted(stream.offers, key=lambda link: link.position)

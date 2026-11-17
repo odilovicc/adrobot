@@ -1,29 +1,61 @@
 {% extends "base.html" %}
+{% set section = "campaigns" %}
 {% block title %}{{ campaign.name }} · Adrobot{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <div class="me-auto">
-    <h1 class="h4 mb-0">{{ campaign.name }}</h1>
-    <div class="text-secondary small">Keitaro #{{ campaign.keitaro_id }} · alias <code>{{ campaign.alias }}</code></div>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Кампании</a></li>
+    <li class="breadcrumb-item active text-truncate" aria-current="page">{{ campaign.name }}</li>
+  </ol>
+</nav>
+
+<div class="page-head">
+  <div class="min-w-0">
+    <h1 class="page-title text-break">{{ campaign.name }}</h1>
+    <div class="meta-line">
+      <span class="mono">#{{ campaign.keitaro_id }}</span>
+      <span class="sep" aria-hidden="true">·</span>
+      <span>alias <button type="button" class="copy mono" data-copy="{{ campaign.alias }}" aria-label="Скопировать alias {{ campaign.alias }}">{{ campaign.alias }} <i class="bi bi-copy" aria-hidden="true"></i></button></span>
+      <span class="sep" aria-hidden="true">·</span>
+      <span id="stream-count">{{ campaign.streams | length }} {{ 'поток' if campaign.streams | length == 1 else ('потока' if campaign.streams | length in [2, 3, 4] else 'потоков') }}</span>
+    </div>
   </div>
-  <button class="btn btn-outline-primary" id="fetch-btn" data-url="/api/campaigns/{{ campaign.keitaro_id }}/fetch">
-    <span class="spinner-border spinner-border-sm d-none me-1"></span><i class="bi bi-cloud-download"></i> Fetch streams from KT
-  </button>
-  <a class="btn btn-outline-secondary" href="{{ kt_url }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> View in KT</a>
-  <button class="btn btn-outline-secondary" id="toggle-removed" aria-pressed="true"><i class="bi bi-archive"></i> <span>Hide removed</span></button>
+  <div class="toolbar">
+    <button class="btn btn-primary" id="fetch-btn" data-url="/api/campaigns/{{ campaign.keitaro_id }}/fetch">
+      <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span><i class="bi bi-cloud-download" aria-hidden="true"></i> Fetch streams from KT
+    </button>
+    <button class="btn btn-outline-secondary" id="toggle-removed" aria-pressed="true"><i class="bi bi-archive" aria-hidden="true"></i> <span>Hide removed</span></button>
+    <a class="btn btn-outline-secondary" href="{{ kt_url }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> View in KT</a>
+  </div>
 </div>
-{% if created %}<div class="alert alert-success">Кампания создана в Keitaro и импортирована.</div>{% endif %}
+
+{% if created %}
+  <div class="alert alert-success alert-dismissible fade show d-flex gap-2" role="status">
+    <i class="bi bi-check-circle mt-1" aria-hidden="true"></i>
+    <div>Кампания создана в Keitaro и открыта в редакторе.</div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+  </div>
+{% endif %}
+
+<div class="dirty-bar d-none" id="dirty-bar" role="status">
+  <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+  <span><strong id="dirty-count">0</strong> <span id="dirty-label">потоков</span> с неопубликованными изменениями. Они живут только в Adrobot, пока вы не нажмёте Push.</span>
+</div>
+
 <div id="streams" data-campaign="{{ campaign.keitaro_id }}">
   {% include "_streams.html" %}
 </div>
 
 <div class="modal fade" id="fetch-confirm" tabindex="-1" aria-labelledby="fetch-confirm-title" aria-hidden="true">
-  <div class="modal-dialog"><div class="modal-content">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title h5" id="fetch-confirm-title">Сбросить неопубликованные изменения?</h2>
       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button></div>
-    <div class="modal-body">В некоторых потоках есть изменения, которые ещё не отправлены в Keitaro. Fetch загрузит состояние из трекера и сбросит их.</div>
+    <div class="modal-body">
+      <p class="mb-2">Fetch загрузит актуальное состояние из Keitaro. Черновики в этих потоках пропадут:</p>
+      <ul class="mb-0" id="fetch-confirm-list"></ul>
+    </div>
     <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
       <button type="button" class="btn btn-warning" id="fetch-confirm-ok">Сбросить и загрузить</button>
     </div>
   </div></div>

@@ -51,6 +51,7 @@ class MockState:
         self.fail_stream_creates = 0
         self.requests: list[tuple[str, str]] = []
         self._seed()
+        self.seed_ids = set(self.campaigns)
 
     def next_id(self) -> int:
         return next(self._ids)
@@ -73,6 +74,30 @@ class MockState:
                          "schema": "landings", "action_type": "http", "filters": [],
                          "offers": [{"offer_id": 3747, "share": 33}, {"offer_id": 3748, "share": 33},
                                     {"offer_id": 3749, "share": 34}]}, sid=564221)  # fmt: skip
+        self._seed_demo_campaigns()
+
+    def _seed_demo_campaigns(self) -> None:
+        """Enough campaigns to make search, filters and pagination on the list page meaningful."""
+        self.groups.append({"id": 3, "name": "Gambling", "position": 3, "type": "campaigns"})
+        brands = ["Keto", "Slim", "Joint", "Cardio", "Vision", "Hair", "Detox", "Libido", "Smart"]
+        geos = [["AU"], ["MX"], ["RO", "BG"], ["DE", "AT"], ["PL"], ["IT"], ["ES", "PT"], ["FR"], ["TR"]]
+        for i in range(36):
+            brand, geo = brands[i % len(brands)], geos[i % len(geos)]
+            camp = self.add_campaign({
+                "name": f"{brand} {'/'.join(geo)} {'FB' if i % 3 else 'PA'} #{i + 1}",
+                "alias": f"demo{i:03d}", "state": "disabled" if i % 7 == 6 else "active",
+                "domain_id": 1 + i % 2, "group_id": [1, 2, 2, 3][i % 4], "traffic_source_id": 1 + i % 2,
+            })  # fmt: skip
+            camp["created_at"] = f"2026-{1 + i % 11:02d}-{1 + (i * 7) % 27:02d} {8 + i % 12:02d}:{(i * 13) % 60:02d}:00"
+            self.add_stream({"campaign_id": camp["id"], "type": "regular", "name": "Geo → redirect",
+                             "position": 1, "schema": "redirect", "action_type": "http",
+                             "action_payload": "https://google.com",
+                             "filters": [{"name": "country", "mode": "accept", "payload": geo}]})  # fmt: skip
+            offers = [3747 + (i + k) % 12 for k in range(1 + i % 3)]
+            base, rem = divmod(100, len(offers))
+            self.add_stream({"campaign_id": camp["id"], "type": "regular", "name": "Offers", "position": 2,
+                             "schema": "landings", "action_type": "http", "filters": [],
+                             "offers": [{"offer_id": o, "share": base + (k < rem)} for k, o in enumerate(offers)]})  # fmt: skip
 
     # --- entities ---------------------------------------------------------
     def add_campaign(self, body: dict[str, Any], cid: int | None = None) -> dict[str, Any]:
@@ -85,6 +110,12 @@ class MockState:
                 "position": len(self.campaigns) + 1, "created_at": _now(), "updated_at": _now()}  # fmt: skip
         self.campaigns[cid] = camp
         return camp
+
+    def view_campaign(self, camp: dict[str, Any]) -> dict[str, Any]:
+        """Real Keitaro also returns group and domain names (probe 2026-11-17)."""
+        group = next((g["name"] for g in self.groups if g["id"] == camp.get("group_id")), "")
+        domain = next((d["name"] for d in self.domains if d["id"] == camp.get("domain_id")), "")
+        return {**camp, "group": group, "domain": f"https://{domain}/" if domain else ""}
 
     def add_stream(self, body: dict[str, Any], sid: int | None = None) -> dict[str, Any]:
         sid = sid or self.next_id()
@@ -159,7 +190,7 @@ def _get(collection: dict[int, dict[str, Any]], key: int, what: str) -> dict[str
 
 @api.get("/campaigns")
 def list_campaigns(offset: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
-    items = [c for c in state.campaigns.values() if c["state"] != "deleted"]
+    items = [state.view_campaign(c) for c in state.campaigns.values() if c["state"] != "deleted"]
     return items[offset : offset + limit if limit else None]
 
 
@@ -174,12 +205,12 @@ def create_campaign(body: dict[str, Any]) -> dict[str, Any]:
         value = _int_or_none(body.get(field))
         if value is not None and value not in {i["id"] for i in items}:
             raise KeitaroError(400, {"error": f"Invalid {field}"})
-    return state.add_campaign(body)
+    return state.view_campaign(state.add_campaign(body))
 
 
 @api.get("/campaigns/{cid}")
 def get_campaign(cid: int) -> dict[str, Any]:
-    return _get(state.campaigns, cid, "Campaign")
+    return state.view_campaign(_get(state.campaigns, cid, "Campaign"))
 
 
 @api.delete("/campaigns/{cid}")

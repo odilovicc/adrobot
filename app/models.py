@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -49,6 +49,10 @@ class Stream(Base):
     schema: Mapped[str] = mapped_column(String(32))
     state: Mapped[str] = mapped_column(String(32))
     summary: Mapped[str] = mapped_column(String(1000), default="")
+    action_type: Mapped[str] = mapped_column(String(32), default="", server_default="")
+    action_payload: Mapped[str] = mapped_column(String(2000), default="", server_default="")
+    # Keitaro filters as-is: [{"name": "country", "mode": "accept", "payload": ["AU"]}, ...]
+    filters: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
 
     campaign: Mapped[Campaign] = relationship(back_populates="streams")
     offers: Mapped[list["StreamOffer"]] = relationship(

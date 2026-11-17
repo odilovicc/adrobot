@@ -1,52 +1,122 @@
 {% extends "base.html" %}
-{% block title %}New campaign · Adrobot{% endblock %}
-{% macro field_error(name) %}{% if errors.get(name) %}<div class="invalid-feedback d-block">{{ errors[name] }}</div>{% endif %}{% endmacro %}
-{% macro select(name, label, items) %}
+{% set section = "new" %}
+{% block title %}Новая кампания · Adrobot{% endblock %}
+{% macro field_error(name) %}{% if errors.get(name) %}<div class="invalid-feedback d-block" id="{{ name }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors[name] }}</div>{% endif %}{% endmacro %}
+{% macro described(name, help=False) %}{% set ids = [] %}{% if help %}{% set _ = ids.append(name ~ '-help') %}{% endif %}{% if errors.get(name) %}{% set _ = ids.append(name ~ '-error') %}{% endif %}{% if ids %}aria-describedby="{{ ids | join(' ') }}"{% endif %}{% endmacro %}
+{% macro select(name, label, items, icon) %}
   <div class="col-md-4">
-    <label class="form-label" for="{{ name }}">{{ label }}</label>
-    <select class="form-select {{ 'is-invalid' if errors.get(name) }}" id="{{ name }}" name="{{ name }}" required>
-      <option value="">—</option>
+    <label class="form-label" for="{{ name }}"><i class="bi {{ icon }} text-secondary" aria-hidden="true"></i> {{ label }} <span class="req" aria-hidden="true">*</span></label>
+    <select class="form-select {{ 'is-invalid' if errors.get(name) }}" id="{{ name }}" name="{{ name }}" required data-searchable
+            data-placeholder="Выберите" {{ 'aria-invalid=true' if errors.get(name) }} {{ described(name) }}>
+      <option value=""></option>
       {% for item in items %}
-        <option value="{{ item.id }}" {{ 'selected' if form[name] == item.id }}>{{ item.name }} (#{{ item.id }})</option>
+        <option value="{{ item.id }}" {{ 'selected' if form[name] == item.id }}>{{ item.name }} · #{{ item.id }}</option>
       {% endfor %}
     </select>
     {{ field_error(name) }}
   </div>
 {% endmacro %}
 {% block content %}
-<div class="row justify-content-center">
-<div class="col-lg-8">
-<h1 class="h4 mb-1">Новая кампания</h1>
-<p class="text-secondary mb-4">Поток 1: страны из Geo → редирект на google.com. Поток 2: все остальные → выбранный оффер, 100%.</p>
-{% if errors.get('__all__') %}<div class="alert alert-danger" role="alert">{{ errors['__all__'] }}</div>{% endif %}
-<form method="post" action="/campaigns/new" class="vstack gap-3" id="creator" novalidate>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Кампании</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Новая кампания</li>
+  </ol>
+</nav>
+<div class="page-head">
   <div>
-    <label class="form-label" for="name">Name</label>
-    <input class="form-control {{ 'is-invalid' if errors.get('name') }}" id="name" name="name" value="{{ form.name or '' }}" required maxlength="255" autofocus>
-    {{ field_error('name') }}
+    <h1 class="page-title">Новая кампания</h1>
+    <p class="page-sub">Создадим кампанию в Keitaro сразу с двумя потоками и откроем её в редакторе.</p>
   </div>
-  <div>
-    <label class="form-label" for="geo">Geo</label>
-    <input class="form-control font-monospace {{ 'is-invalid' if errors.get('geo') }}" id="geo" name="geo" value="{{ form.geo or '' }}" placeholder="MX,AU,RO" required autocomplete="off">
-    <div class="form-text">Коды стран ISO 3166-1 alpha-2 через запятую.</div>
-    {{ field_error('geo') }}
-  </div>
-  <div>
-    <label class="form-label" for="offer_id">Offer</label>
-    <select class="form-select {{ 'is-invalid' if errors.get('offer_id') }}" id="offer_id" name="offer_id" data-offer-search required>
-      {% if offer %}<option value="{{ offer.id }}" selected>#{{ offer.id }} {{ offer.name }}</option>{% endif %}
-    </select>
-    {{ field_error('offer_id') }}
-  </div>
-  <div class="row g-3">
-    {{ select('domain_id', 'Домен', domains) }}
-    {{ select('group_id', 'Группа', groups) }}
-    {{ select('traffic_source_id', 'Источник', sources) }}
-  </div>
-  <div>
-    <button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none me-1"></span>Создать кампанию</button>
-  </div>
-</form>
 </div>
+
+{% if errors.get('__all__') %}
+  <div class="alert alert-danger d-flex gap-2" role="alert"><i class="bi bi-exclamation-octagon mt-1" aria-hidden="true"></i><div>{{ errors['__all__'] }}</div></div>
+{% elif errors %}
+  <div class="alert alert-danger" role="alert" id="error-summary" tabindex="-1">
+    <strong>Исправьте {{ errors | length }} {{ 'поле' if errors | length == 1 else 'поля' }}:</strong>
+    <ul class="mb-0 mt-1">{% for name, message in errors.items() %}<li><a href="#{{ name }}" class="alert-link">{{ message }}</a></li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7 col-xl-8">
+    <form method="post" action="/campaigns/new" class="card form-card" id="creator" novalidate>
+      <fieldset class="form-section">
+        <legend>Кампания</legend>
+        <div class="mb-3">
+          <label class="form-label" for="name">Название <span class="req" aria-hidden="true">*</span></label>
+          <input class="form-control {{ 'is-invalid' if errors.get('name') }}" id="name" name="name" value="{{ form.name or '' }}"
+                 required maxlength="255" autocomplete="off" placeholder="Например, Keto AU FB" {{ 'autofocus' if not errors }}
+                 {{ 'aria-invalid=true' if errors.get('name') }} {{ described('name') }}>
+          {{ field_error('name') }}
+        </div>
+        <div class="row g-3">
+          {{ select('domain_id', 'Домен', domains, 'bi-globe2') }}
+          {{ select('group_id', 'Группа', groups, 'bi-folder2') }}
+          {{ select('traffic_source_id', 'Источник', sources, 'bi-broadcast') }}
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Поток 1 · гео-редирект</legend>
+        <label class="form-label" for="geo">Страны <span class="req" aria-hidden="true">*</span></label>
+        <input class="form-control mono {{ 'is-invalid' if errors.get('geo') }}" id="geo" name="geo" value="{{ form.geo or '' }}"
+               placeholder="AU, MX, RO" required autocomplete="off" spellcheck="false"
+               {{ 'aria-invalid=true' if errors.get('geo') }} {{ described('geo', True) }}>
+        <div class="geo-chips" id="geo-chips" aria-hidden="true"></div>
+        <div class="form-text" id="geo-help">Коды ISO 3166-1 alpha-2 через запятую или пробел. Великобритания — <code>GB</code>, не <code>UK</code>.</div>
+        {{ field_error('geo') }}
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Поток 2 · оффер для остальных</legend>
+        <label class="form-label" for="offer_id">Оффер <span class="req" aria-hidden="true">*</span></label>
+        <select class="form-select {{ 'is-invalid' if errors.get('offer_id') }}" id="offer_id" name="offer_id" data-offer-search required
+                {{ 'aria-invalid=true' if errors.get('offer_id') }} {{ described('offer_id', True) }}>
+          {% if offer %}<option value="{{ offer.id }}" selected>#{{ offer.id }} {{ offer.name }}</option>{% endif %}
+        </select>
+        <div class="form-text" id="offer_id-help">Получит 100% трафика из всех стран, кроме перечисленных выше. Другие офферы добавите в редакторе.</div>
+        {{ field_error('offer_id') }}
+      </fieldset>
+
+      <div class="form-actions">
+        <a class="btn btn-link text-secondary" href="/">Отмена</a>
+        <button class="btn btn-primary" type="submit">
+          <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span>
+          <span class="label">Создать кампанию</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <aside class="col-lg-5 col-xl-4" aria-labelledby="preview-title">
+    <div class="card preview-card sticky-lg-top">
+      <div class="card-body">
+        <h2 class="h6 text-uppercase text-secondary fw-semibold mb-3" id="preview-title">Будет создано в Keitaro</h2>
+        <div class="preview-campaign">
+          <i class="bi bi-megaphone" aria-hidden="true"></i>
+          <div><div class="fw-semibold" id="pv-name">{{ form.name or 'Без названия' }}</div>
+            <div class="small text-secondary"><span id="pv-domain">домен не выбран</span> · <span id="pv-group">без группы</span></div></div>
+        </div>
+        <ol class="flow-list">
+          <li class="flow">
+            <div class="flow-head"><span class="flow-num">1</span> Гео-редирект</div>
+            <div class="flow-body">
+              <div class="flow-cond">Если страна <span id="pv-geo" class="chips-inline"><span class="text-secondary">—</span></span></div>
+              <div class="flow-act"><i class="bi bi-arrow-return-right" aria-hidden="true"></i> 302 на <span class="mono">google.com</span></div>
+            </div>
+          </li>
+          <li class="flow">
+            <div class="flow-head"><span class="flow-num">2</span> Все остальные</div>
+            <div class="flow-body">
+              <div class="flow-act"><i class="bi bi-arrow-return-right" aria-hidden="true"></i> <span id="pv-offer">оффер не выбран</span> <span class="badge badge-soft mono">100%</span></div>
+            </div>
+          </li>
+        </ol>
+        <p class="small text-secondary mb-0"><i class="bi bi-shield-check" aria-hidden="true"></i> Если поток не создастся, кампания будет удалена — полусобранных кампаний не останется.</p>
+      </div>
+    </div>
+  </aside>
 </div>
 {% endblock %}

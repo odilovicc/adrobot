@@ -12,6 +12,7 @@ from app.errors import DomainError
 from app.keitaro import KeitaroClient, KeitaroError
 from app.models import Campaign
 from app.services import creator
+from app.services.campaigns import PER_PAGE, ListQuery, build_page
 from app.services.sync import import_campaign
 
 router = APIRouter()
@@ -23,15 +24,20 @@ Conf = Annotated[Settings, Depends(settings_dep)]
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request, kt: Kt, db: Db) -> Response:
+    query = ListQuery.parse(request.query_params)
     error, campaigns = None, []
     try:
-        campaigns = sorted(kt.list_campaigns(), key=lambda c: c["id"], reverse=True)
+        campaigns = kt.list_campaigns(force=request.query_params.get("refresh") == "1")
     except KeitaroError as exc:
         error = exc.message
-    imported = set(db.scalars(select(Campaign.keitaro_id)))
-    return templates.TemplateResponse(
-        request, "index.html", {"campaigns": campaigns, "imported": imported, "error": error}
-    )
+    local = db.scalars(select(Campaign)).all()
+    opened = {c.keitaro_id for c in local}
+    dirty = {c.keitaro_id: sum(s.is_dirty for s in c.streams) for c in local}
+    page = build_page(campaigns, query, opened, dirty)
+    ctx = {"page": page, "q": page.query, "error": error, "per_page": PER_PAGE}
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return templates.TemplateResponse(request, "_campaign_table.html", ctx)
+    return templates.TemplateResponse(request, "index.html", ctx)
 
 
 def _creator_choices(kt: KeitaroClient) -> dict[str, list[dict[str, Any]]]:

@@ -24,6 +24,10 @@ class KeitaroClient:
         self.offers_ttl = offers_ttl
         self._offers: list[dict[str, Any]] | None = None
         self._offers_at = 0.0
+        # Keitaro has no campaign search: the list page filters the full list, typing re-requests it.
+        self.campaigns_ttl = 15.0
+        self._campaigns: list[dict[str, Any]] | None = None
+        self._campaigns_at = 0.0
         self._lock = threading.Lock()
 
     @classmethod
@@ -51,16 +55,23 @@ class KeitaroClient:
             raise KeitaroError(f"Keitaro вернул не JSON ({resp.status_code})", resp.status_code) from exc
 
     # --- campaigns --------------------------------------------------------
-    def list_campaigns(self) -> list[dict[str, Any]]:
-        return self._request("GET", "/campaigns")
+    def list_campaigns(self, force: bool = False) -> list[dict[str, Any]]:
+        with self._lock:
+            fresh = self._campaigns is not None and time.monotonic() - self._campaigns_at < self.campaigns_ttl
+            if force or not fresh:
+                self._campaigns = self._request("GET", "/campaigns")
+                self._campaigns_at = time.monotonic()
+            return list(self._campaigns or [])
 
     def get_campaign(self, campaign_id: int) -> dict[str, Any]:
         return self._request("GET", f"/campaigns/{campaign_id}")
 
     def create_campaign(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._campaigns = None
         return self._request("POST", "/campaigns", json=payload)
 
     def delete_campaign(self, campaign_id: int) -> None:
+        self._campaigns = None
         self._request("DELETE", f"/campaigns/{campaign_id}")
 
     # --- streams ----------------------------------------------------------

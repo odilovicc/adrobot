@@ -1,30 +1,61 @@
 {% extends "base.html" %}
+{% set section = "campaigns" %}
+{% block title %}Кампании · Adrobot{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">Кампании в Keitaro</h1>
-{% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-{% elif not campaigns %}
-  <p class="text-secondary">Кампаний пока нет. <a href="/campaigns/new">Создать первую</a>.</p>
-{% else %}
-<div class="table-responsive">
-<table class="table table-hover align-middle">
-  <thead><tr><th class="text-secondary">ID</th><th>Название</th><th>Alias</th><th>Статус</th><th></th></tr></thead>
-  <tbody>
-  {% for c in campaigns %}
-    <tr>
-      <td class="text-secondary">#{{ c.id }}</td>
-      <td><a href="/campaigns/{{ c.id }}/streams">{{ c.name }}</a></td>
-      <td><code>{{ c.alias }}</code></td>
-      <td><span class="badge text-bg-{{ 'success' if c.state == 'active' else 'secondary' }}">{{ c.state }}</span></td>
-      <td class="text-end">
-        <a class="btn btn-sm btn-outline-primary" href="/campaigns/{{ c.id }}/streams">
-          {{ 'Открыть редактор' if c.id in imported else 'Импортировать' }}
-        </a>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Кампании</h1>
+    <p class="page-sub">Все кампании из Keitaro. Откройте кампанию, чтобы редактировать офферы в её потоках.</p>
+  </div>
+  <a class="btn btn-primary" href="/campaigns/new"><i class="bi bi-plus-lg" aria-hidden="true"></i> Новая кампания</a>
 </div>
-{% endif %}
+
+<form id="campaign-filters" class="filters card" method="get" action="/" role="search" aria-label="Фильтры кампаний">
+  <div class="filters-row">
+    <div class="search-box">
+      <label class="visually-hidden" for="f-q">Поиск</label>
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" id="f-q" name="q" type="search" value="{{ q.q }}"
+             placeholder="Название, alias или #ID" autocomplete="off" spellcheck="false">
+      <kbd class="search-kbd d-none d-md-inline" aria-hidden="true">/</kbd>
+    </div>
+
+    <fieldset class="seg" aria-label="Статус">
+      {% for value, label in [("", "Все"), ("active", "Active"), ("disabled", "Disabled")] %}
+        <input type="radio" class="btn-check" name="state" id="f-state-{{ value or 'all' }}" value="{{ value }}" {{ 'checked' if q.state == value }}>
+        <label class="seg-btn" for="f-state-{{ value or 'all' }}">{{ label }} <span class="count" data-count="state:{{ value }}">{{ page.state_counts.get(value, 0) }}</span></label>
+      {% endfor %}
+    </fieldset>
+
+    <div class="filter-group">
+      <label class="visually-hidden" for="f-group">Группа</label>
+      <select class="form-select" id="f-group" name="group">
+        <option value="">Все группы</option>
+        {% for name, count in page.groups %}
+          <option value="{{ name }}" {{ 'selected' if q.group == name }}>{{ 'Без группы' if name == '-' else name }} ({{ count }})</option>
+        {% endfor %}
+        {% if q.group and q.group not in page.groups | map('first') | list %}<option value="{{ q.group }}" selected>{{ q.group }} (0)</option>{% endif %}
+      </select>
+    </div>
+
+    <div class="form-check form-switch mine-switch">
+      <input class="form-check-input" type="checkbox" role="switch" id="f-mine" name="mine" value="1" {{ 'checked' if q.mine }}>
+      <label class="form-check-label" for="f-mine">Открытые в Adrobot</label>
+    </div>
+
+    <input type="hidden" name="sort" value="{{ q.sort }}">
+    <input type="hidden" name="dir" value="{{ 'desc' if q.desc else 'asc' }}">
+    <input type="hidden" name="per" value="{{ q.per }}">
+    <noscript><button class="btn btn-primary" type="submit">Применить</button></noscript>
+
+    <div class="ms-lg-auto d-flex gap-2">
+      <a class="btn btn-outline-secondary btn-sm {{ 'd-none' if not q.is_filtered }}" id="f-reset" href="/"><i class="bi bi-x-lg" aria-hidden="true"></i> Сбросить</a>
+      <a class="btn btn-outline-secondary btn-sm" id="f-refresh" href="{{ q.url(refresh=1) }}" title="Перечитать список из Keitaro" aria-label="Обновить из Keitaro"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></a>
+    </div>
+  </div>
+</form>
+
+<div id="campaign-table" aria-live="polite">
+  {% include "_campaign_table.html" %}
+</div>
 {% endblock %}
