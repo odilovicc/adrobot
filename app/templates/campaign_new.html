@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}New campaign · Adrobot{% endblock %}
+{% macro field_error(name) %}{% if errors.get(name) %}<div class="invalid-feedback d-block">{{ errors[name] }}</div>{% endif %}{% endmacro %}
+{% macro select(name, label, items) %}
+  <div class="col-md-4">
+    <label class="form-label" for="{{ name }}">{{ label }}</label>
+    <select class="form-select {{ 'is-invalid' if errors.get(name) }}" id="{{ name }}" name="{{ name }}" required>
+      <option value="">—</option>
+      {% for item in items %}
+        <option value="{{ item.id }}" {{ 'selected' if form[name] == item.id }}>{{ item.name }} (#{{ item.id }})</option>
+      {% endfor %}
+    </select>
+    {{ field_error(name) }}
+  </div>
+{% endmacro %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<h1 class="h4 mb-1">Новая кампания</h1>
+<p class="text-secondary mb-4">Поток 1: страны из Geo → редирект на google.com. Поток 2: все остальные → выбранный оффер, 100%.</p>
+{% if errors.get('__all__') %}<div class="alert alert-danger" role="alert">{{ errors['__all__'] }}</div>{% endif %}
+<form method="post" action="/campaigns/new" class="vstack gap-3" id="creator" novalidate>
+  <div>
+    <label class="form-label" for="name">Name</label>
+    <input class="form-control {{ 'is-invalid' if errors.get('name') }}" id="name" name="name" value="{{ form.name or '' }}" required maxlength="255" autofocus>
+    {{ field_error('name') }}
+  </div>
+  <div>
+    <label class="form-label" for="geo">Geo</label>
+    <input class="form-control font-monospace {{ 'is-invalid' if errors.get('geo') }}" id="geo" name="geo" value="{{ form.geo or '' }}" placeholder="MX,AU,RO" required autocomplete="off">
+    <div class="form-text">Коды стран ISO 3166-1 alpha-2 через запятую.</div>
+    {{ field_error('geo') }}
+  </div>
+  <div>
+    <label class="form-label" for="offer_id">Offer</label>
+    <select class="form-select {{ 'is-invalid' if errors.get('offer_id') }}" id="offer_id" name="offer_id" data-offer-search required>
+      {% if offer %}<option value="{{ offer.id }}" selected>#{{ offer.id }} {{ offer.name }}</option>{% endif %}
+    </select>
+    {{ field_error('offer_id') }}
+  </div>
+  <div class="row g-3">
+    {{ select('domain_id', 'Домен', domains) }}
+    {{ select('group_id', 'Группа', groups) }}
+    {{ select('traffic_source_id', 'Источник', sources) }}
+  </div>
+  <div>
+    <button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none me-1"></span>Создать кампанию</button>
+  </div>
+</form>
+</div>
+</div>
+{% endblock %}

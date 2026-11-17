@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Кампании в Keitaro</h1>
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% elif not campaigns %}
+  <p class="text-secondary">Кампаний пока нет. <a href="/campaigns/new">Создать первую</a>.</p>
+{% else %}
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead><tr><th class="text-secondary">ID</th><th>Название</th><th>Alias</th><th>Статус</th><th></th></tr></thead>
+  <tbody>
+  {% for c in campaigns %}
+    <tr>
+      <td class="text-secondary">#{{ c.id }}</td>
+      <td><a href="/campaigns/{{ c.id }}/streams">{{ c.name }}</a></td>
+      <td><code>{{ c.alias }}</code></td>
+      <td><span class="badge text-bg-{{ 'success' if c.state == 'active' else 'secondary' }}">{{ c.state }}</span></td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-primary" href="/campaigns/{{ c.id }}/streams">
+          {{ 'Открыть редактор' if c.id in imported else 'Импортировать' }}
+        </a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

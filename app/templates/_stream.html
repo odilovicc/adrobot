@@ -1,0 +1,70 @@
+{% set dirty = stream.is_dirty %}
+{% set total = stream.total_share %}
+<section class="card mb-3 stream {{ 'stream-dirty' if dirty }}" id="stream-{{ stream.id }}" data-id="{{ stream.id }}" data-dirty="{{ 'true' if dirty else 'false' }}">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <div class="me-auto">
+      <span class="fw-semibold">Stream: {{ stream.name }}</span>
+      <span class="text-secondary">(#{{ stream.position }})</span>
+      <span class="text-secondary small">· stream_id {{ stream.keitaro_id }} · {{ stream.schema }}{% if stream.state != 'active' %} · {{ stream.state }}{% endif %}</span>
+      {% if dirty %}<span class="badge text-bg-warning ms-1">не опубликовано</span>{% endif %}
+    </div>
+    {% if stream.offers %}
+      <span class="badge {{ 'text-bg-danger' if stream.active_offers and total != 100 else 'text-bg-light border' }}" title="Сумма весов активных офферов">Σ {{ total }}%</span>
+    {% endif %}
+    {% if dirty %}
+      <button class="btn btn-sm btn-success" data-action="push" {{ 'disabled' if stream.active_offers and total != 100 }}><i class="bi bi-cloud-upload"></i> Push to KT</button>
+      <button class="btn btn-sm btn-outline-secondary" data-action="cancel"><i class="bi bi-x-lg"></i> Cancel</button>
+    {% endif %}
+  </div>
+  {% if stream.offers %}
+  <div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Offer</th><th class="share-col">Share</th><th class="text-secondary">Stats</th><th class="text-secondary">Trends</th><th class="text-end">Actions</th></tr></thead>
+    <tbody>
+    {% for link in stream.offers %}
+      {% set removed = link.state == 'removed' %}
+      <tr class="{{ 'offer-removed' if removed }} {{ 'offer-new' if link.is_new }}" data-link="{{ link.id }}">
+        <td>
+          <span class="text-secondary">#{{ link.offer_id }}</span> {{ link.offer.name }}
+          {% if removed %}<span class="badge text-bg-secondary ms-1">removed</span>{% endif %}
+          {% if link.is_new %}<span class="badge text-bg-info ms-1">new</span>{% endif %}
+          {% if link.kt_state == 'disabled' %}<span class="badge text-bg-light border ms-1" title="Выключен в Keitaro">disabled in KT</span>{% endif %}
+        </td>
+        <td class="share-col text-nowrap">
+          {% if removed %}
+            <span>0%</span>
+          {% else %}
+            <button class="btn btn-link btn-sm p-0 share-value" data-action="edit-share" data-share="{{ link.share }}" title="Задать вес вручную (закрепит его)">{{ link.share }}%</button>
+            <button class="btn btn-sm btn-link p-0 ms-1 pin {{ 'pin-on' if link.pinned }}" data-action="pin" data-pinned="{{ 'true' if link.pinned else 'false' }}"
+                    title="{{ 'Открепить вес' if link.pinned else 'Закрепить вес' }}" aria-pressed="{{ 'true' if link.pinned else 'false' }}">
+              <i class="bi {{ 'bi-pin-angle-fill' if link.pinned else 'bi-pin-angle' }}"></i>
+            </button>
+          {% endif %}
+          {% if link.share != link.published_share and not link.is_new %}<span class="text-secondary small ms-1" title="В Keitaro">(KT {{ link.published_share }}%)</span>{% endif %}
+        </td>
+        <td class="text-secondary">—</td>
+        <td class="text-secondary">—</td>
+        <td class="text-end">
+          {% if removed %}
+            <button class="btn btn-sm btn-outline-primary" data-action="restore"><i class="bi bi-arrow-counterclockwise"></i> Bring back</button>
+          {% else %}
+            <button class="btn btn-sm btn-outline-danger" data-action="remove"><i class="bi bi-trash3"></i> Remove</button>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  <div class="card-body py-2">
+    {% if stream.accepts_offers %}
+      <div class="d-flex gap-2 add-offer">
+        <select class="form-select form-select-sm" data-offer-search aria-label="Добавить оффер"></select>
+        <button class="btn btn-sm btn-primary text-nowrap" data-action="add"><i class="bi bi-plus-lg"></i> Add</button>
+      </div>
+    {% else %}
+      <div class="text-secondary small">{{ stream.summary }}</div>
+    {% endif %}
+  </div>
+</section>

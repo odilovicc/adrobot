@@ -1,0 +1,13 @@
+body { background: #f6f7f9; }
+.stream { transition: background-color .2s ease; }
+.stream-dirty { background: #fff8db; border-color: #f0c84b; }
+.stream-dirty .card-header, .stream-dirty .table { background: transparent; --bs-table-bg: transparent; }
+.offer-removed td { color: #8a9099 !important; }
+.offer-removed td:first-child { text-decoration: line-through; text-decoration-color: #c4c8ce; }
+.share-col { width: 11rem; }
+.share-value { font-variant-numeric: tabular-nums; text-decoration: underline dotted; min-width: 2.75rem; text-align: left; }
+.share-input { width: 5rem; display: inline-block; }
+.pin { color: #9aa0a8; }
+.pin-on { color: #d63384; }
+.add-offer .select2-container { flex: 1 1 auto; }
+.table > :not(caption) > * > * { padding-top: .45rem; padding-bottom: .45rem; }

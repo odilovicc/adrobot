@@ -1,0 +1,6 @@
+{% for stream in campaign.streams %}
+  {% include "_stream.html" %}
+{% else %}
+  <p class="text-secondary">В кампании нет потоков.</p>
+{% endfor %}
+{% if campaign.fetched_at %}<p class="text-secondary small mt-2">Fetched {{ campaign.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>{% endif %}

@@ -1,0 +1,25 @@
+services:
+  mock:
+    build: .
+    command: uvicorn mock_keitaro.app:app --host 0.0.0.0 --port 8100
+    ports: ["8100:8100"]
+
+  app:
+    build: .
+    ports: ["8000:8000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Defaults to the bundled mock; override in .env to use a real tracker.
+      KEITARO_URL: ${KEITARO_URL:-http://mock:8100}
+      KEITARO_API_KEY: ${KEITARO_API_KEY:-mock-key}
+      DATABASE_URL: sqlite:////data/adrobot.db
+      DEFAULT_DOMAIN_ID: ${DEFAULT_DOMAIN_ID:-1}
+      DEFAULT_GROUP_ID: ${DEFAULT_GROUP_ID:-1}
+      DEFAULT_TRAFFIC_SOURCE_ID: ${DEFAULT_TRAFFIC_SOURCE_ID:-1}
+    volumes: ["adrobot-data:/data"]
+    depends_on: [mock]
+
+volumes:
+  adrobot-data:
